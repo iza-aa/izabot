@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
+  AppWindow,
   ArrowUpRight,
   Clock3,
   FileText,
@@ -9,9 +10,10 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  X,
 } from 'lucide-react';
 import type { Page } from '../server/pages';
-import type { Conversation, Dot, Space, Task } from '../shared/types';
+import type { Conversation, Dot, Space, SpaceApp, Task } from '../shared/types';
 import { Mascot } from './Mascot';
 
 export function pageExcerpt(content: string) {
@@ -43,12 +45,15 @@ export function SpaceLibrary({
   tasks,
   taskThreads,
   conversations,
+  spaceApps,
   onPage,
   onNew,
   onChat,
   onEditDot,
   onNewDot,
   onActivity,
+  onBindApp,
+  onUnbindApp,
 }: {
   space: Space;
   pages: Page[];
@@ -56,16 +61,70 @@ export function SpaceLibrary({
   tasks: Task[];
   taskThreads: { taskId: string; threadId: string }[];
   conversations: Conversation[];
+  spaceApps: SpaceApp[];
   onPage: (id: string) => void;
   onNew: () => void;
   onChat: (dotId: string) => void;
   onEditDot: (dot: Dot) => void;
   onNewDot: () => void;
   onActivity: () => void;
+  onBindApp: (appName: string) => Promise<void>;
+  onUnbindApp: (appName: string) => Promise<void>;
 }) {
   const [query, setQuery] = useState('');
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [sort, setSort] = useState('recent');
+  const [openApps, setOpenApps] = useState<{ appName: string }[]>([]);
+  const [appDraft, setAppDraft] = useState('');
+  const [appBusy, setAppBusy] = useState('');
+  const [appError, setAppError] = useState('');
+  const boundApps = spaceApps.filter((app) => app.spaceId === space.id);
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/connected-apps/windows')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: { app_name?: string }[]) => {
+        if (!active) return;
+        const seen = new Set<string>();
+        setOpenApps(
+          list.flatMap((win) => {
+            const appName = win.app_name?.trim();
+            if (!appName || seen.has(appName)) return [];
+            seen.add(appName);
+            return [{ appName }];
+          }),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+  const bindApp = async () => {
+    const appName = appDraft.trim();
+    if (!appName || appBusy) return;
+    setAppBusy('bind');
+    setAppError('');
+    try {
+      await onBindApp(appName);
+      setAppDraft('');
+    } catch (e) {
+      setAppError(e instanceof Error ? e.message : 'Could not bind the app.');
+    } finally {
+      setAppBusy('');
+    }
+  };
+  const unbindApp = async (appName: string) => {
+    setAppBusy(appName);
+    setAppError('');
+    try {
+      await onUnbindApp(appName);
+    } catch (e) {
+      setAppError(e instanceof Error ? e.message : 'Could not unbind the app.');
+    } finally {
+      setAppBusy('');
+    }
+  };
   const filtered = useMemo(
     () =>
       pages
@@ -150,6 +209,67 @@ export function SpaceLibrary({
           </div>
         )}
       </div>
+
+      <div className="library-section-label">
+        <h2>Apps</h2>
+        <span>
+          {boundApps.length} {boundApps.length === 1 ? 'app' : 'apps'}
+        </span>
+      </div>
+      <div className="workplace-apps">
+        {boundApps.map((app) => (
+          <span className="app-chip" key={app.appName}>
+            <AppWindow size={13} />
+            <span>{app.appName}</span>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={`Unbind ${app.appName}`}
+              disabled={!!appBusy}
+              onClick={() => void unbindApp(app.appName)}
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+        {!boundApps.length && (
+          <div className="workplace-empty">
+            No apps bound yet. Bind the Mac apps this Space works with.
+          </div>
+        )}
+      </div>
+      <div className="app-bind-row">
+        <input
+          list={`space-apps-${space.id}`}
+          value={appDraft}
+          onChange={(e) => setAppDraft(e.target.value)}
+          placeholder="App name (for example WhatsApp)"
+          aria-label="App name to bind to this Space"
+        />
+        <datalist id={`space-apps-${space.id}`}>
+          {openApps
+            .filter(
+              (app) =>
+                !boundApps.some((bound) => bound.appName === app.appName),
+            )
+            .map((app) => (
+              <option key={app.appName} value={app.appName} />
+            ))}
+        </datalist>
+        <button
+          type="button"
+          className="document-primary quiet"
+          disabled={!appDraft.trim() || !!appBusy}
+          onClick={() => void bindApp()}
+        >
+          <Plus size={13} /> Bind app
+        </button>
+      </div>
+      {appError && (
+        <p className="chat-error" role="alert">
+          {appError}
+        </p>
+      )}
 
       <div className="library-section-label">
         <h2>Automations</h2>

@@ -1350,3 +1350,51 @@
   border: 1px solid #dfe3db;
   border-radius: 7px;
 }
+.workplace-apps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.workplace-apps .workplace-empty {
+  flex: 1 1 100%;
+}
+.app-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid #e4e8e1;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12.5px;
+  color: #37403a;
+}
+.app-chip .icon-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: #8a8d88;
+}
+.app-chip .icon-button:hover:not(:disabled) {
+  color: #2f3c34;
+  background: #f1f3ef;
+}
+.app-bind-row {
+  display: flex;
+  gap: 8px;
+  max-width: 560px;
+  margin-bottom: 38px;
+}
+.app-bind-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid #dfe3db;
+  border-radius: 9px;
+  background: #fff;
+  color: inherit;
+}
+.app-bind-row .document-primary {
+  flex-shrink: 0;
+}

@@ -31,6 +31,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
       setup: platform.setup(),
       calls: platform.workspace.calls(),
       taskThreads: platform.workspace.taskThreads(),
+      spaceApps: platform.workspace.spaceApps(),
     }),
   );
   app.post('/spaces', async (c) => {
@@ -50,6 +51,43 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
       platform.workspace.createSpace(data.data.name, data.data.description),
       201,
     );
+  });
+  app.get('/spaces/:id/apps', (c) => {
+    const spaceId = c.req.param('id');
+    if (!platform.workspace.spaces().some((space) => space.id === spaceId))
+      return c.json({ error: 'Space not found.' }, 404);
+    return c.json(platform.workspace.spaceApps(spaceId));
+  });
+  app.post('/spaces/:id/apps', async (c) => {
+    const spaceId = c.req.param('id');
+    if (!platform.workspace.spaces().some((space) => space.id === spaceId))
+      return c.json({ error: 'Space not found.' }, 404);
+    const data = z
+      .object({
+        appName: z.string().trim().min(1).max(120),
+        bundleId: z.string().trim().max(200).nullish(),
+      })
+      .strict()
+      .safeParse(await c.req.json().catch(() => null));
+    if (!data.success)
+      return c.json({ error: 'Provide an app name to bind.' }, 400);
+    return c.json(
+      platform.workspace.bindSpaceApp(
+        spaceId,
+        data.data.appName,
+        data.data.bundleId,
+      ),
+      201,
+    );
+  });
+  app.delete('/spaces/:id/apps/:appName', (c) => {
+    const removed = platform.workspace.unbindSpaceApp(
+      c.req.param('id'),
+      c.req.param('appName'),
+    );
+    return removed
+      ? c.json({ ok: true })
+      : c.json({ error: 'Bound app not found.' }, 404);
   });
   app.post('/dots', async (c) => {
     const data = dotSchema
@@ -95,8 +133,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
   });
   app.put('/dots/:id', async (c) => {
     const data = dotSchema.safeParse(await c.req.json().catch(() => null));
-    if (!data.success)
-      return c.json({ error: 'Invalid specialist settings.' }, 400);
+    if (!data.success) return c.json({ error: 'Invalid Dot settings.' }, 400);
     const current = platform.workspace.dot(c.req.param('id'));
     if (!current) return c.json({ error: 'Dot not found.' }, 404);
     try {

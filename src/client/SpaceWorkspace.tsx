@@ -101,6 +101,17 @@ export function SpaceWorkspace({
       setError(e instanceof Error ? e.message : 'Could not create page.');
     }
   };
+  const bindApp = async (appName: string) => {
+    await api(`/spaces/${space.id}/apps`, 'POST', { appName });
+    onRefresh();
+  };
+  const unbindApp = async (appName: string) => {
+    await api(
+      `/spaces/${space.id}/apps/${encodeURIComponent(appName)}`,
+      'DELETE',
+    );
+    onRefresh();
+  };
   return (
     <main
       aria-label="Space documents"
@@ -119,12 +130,15 @@ export function SpaceWorkspace({
           tasks={tasks}
           taskThreads={workspace.taskThreads}
           conversations={workspace.conversations}
+          spaceApps={workspace.spaceApps}
           onPage={onPage}
           onNew={() => void create(null)}
           onChat={onChat}
           onEditDot={onEditDot}
           onNewDot={onCreateDot}
           onActivity={onActivity}
+          onBindApp={bindApp}
+          onUnbindApp={unbindApp}
         />
       ) : page ? (
         <div className="space-writing-layout">

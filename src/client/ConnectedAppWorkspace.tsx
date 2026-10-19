@@ -25,7 +25,8 @@ export interface ConnectedWindow {
   height: number;
 }
 
-export type AgentCursorPhase = 'idle' | 'observe' | 'move' | 'click' | 'type' | 'hotkey';
+export type AgentCursorPhase =
+  'idle' | 'observe' | 'move' | 'click' | 'type' | 'hotkey';
 
 export interface CursorTelemetryPayload {
   seq: number;
@@ -74,7 +75,10 @@ export function WorkspaceAgentCursor({
     const distNorm = Math.hypot(dx / width, dy / height);
     const duration =
       telemetry.duration_ms ??
-      Math.min(340, Math.max(120, Math.round(110 + 220 * Math.log2(1 + distNorm / 0.04))));
+      Math.min(
+        340,
+        Math.max(120, Math.round(110 + 220 * Math.log2(1 + distNorm / 0.04))),
+      );
 
     if (telemetry.is_clicking || telemetry.phase === 'click') {
       setRippleKey((prev) => prev + 1);
@@ -83,7 +87,10 @@ export function WorkspaceAgentCursor({
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
     }
-    if ((telemetry.duration_ms !== undefined && telemetry.duration_ms <= 0) || distNorm < 0.003) {
+    if (
+      (telemetry.duration_ms !== undefined && telemetry.duration_ms <= 0) ||
+      distNorm < 0.003
+    ) {
       posRef.current = { x: targetX, y: targetY };
       cursorRootRef.current.style.transform = `translate3d(${targetX.toFixed(1)}px, ${targetY.toFixed(1)}px, 0)`;
       return;
@@ -114,7 +121,13 @@ export function WorkspaceAgentCursor({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [telemetry?.seq, telemetry?.norm_x, telemetry?.norm_y, telemetry?.phase, canvasRef]);
+  }, [
+    telemetry?.seq,
+    telemetry?.norm_x,
+    telemetry?.norm_y,
+    telemetry?.phase,
+    canvasRef,
+  ]);
 
   const phase = telemetry?.phase || (telemetry?.is_clicking ? 'click' : 'idle');
   const isPressed = telemetry?.is_clicking || phase === 'click';
@@ -135,10 +148,12 @@ export function WorkspaceAgentCursor({
   };
 
   const renderPhaseText = () => {
-    if (phase === 'type' && telemetry?.label) return `Typing "${telemetry.label}"`;
+    if (phase === 'type' && telemetry?.label)
+      return `Typing "${telemetry.label}"`;
     if (phase === 'hotkey' && telemetry?.label) return telemetry.label;
     if (phase === 'observe') return 'Observing the screen…';
-    if (phase === 'click') return telemetry?.label ? `Click ${telemetry.label}` : 'Clicking';
+    if (phase === 'click')
+      return telemetry?.label ? `Click ${telemetry.label}` : 'Clicking';
     return telemetry?.label || 'OpenDots Agent';
   };
 
@@ -153,7 +168,11 @@ export function WorkspaceAgentCursor({
       }}
     >
       {rippleKey > 0 && (
-        <span key={rippleKey} className="cursor-ripple-group" aria-hidden="true">
+        <span
+          key={rippleKey}
+          className="cursor-ripple-group"
+          aria-hidden="true"
+        >
           <span className="cursor-ripple-ring primary-ring" />
           <span className="cursor-ripple-ring secondary-ring" />
         </span>
@@ -185,7 +204,13 @@ export function WorkspaceAgentCursor({
   );
 }
 
-export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
+export function ConnectedAppWorkspace({
+  onClose,
+  boundApps = [],
+}: {
+  onClose: () => void;
+  boundApps?: string[];
+}) {
   const [windows, setWindows] = useState<ConnectedWindow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [timestamp, setTimestamp] = useState<number>(Date.now());
@@ -203,14 +228,26 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
   });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const lastFrameVersion = useRef<number>(1);
-  const [takeover, setTakeover] = useState<{ active: boolean; reason?: string } | null>(null);
+  const boundKey = boundApps.map((app) => app.toLowerCase()).join('\u0000');
+  const boundSet = new Set(boundKey.split('\u0000').filter(Boolean));
+  const orderedWindows = [
+    ...windows.filter((win) => boundSet.has(win.app_name.toLowerCase())),
+    ...windows.filter((win) => !boundSet.has(win.app_name.toLowerCase())),
+  ];
+  const [takeover, setTakeover] = useState<{
+    active: boolean;
+    reason?: string;
+  } | null>(null);
 
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
         const res = await fetch('/api/connected-apps/takeover/status');
         if (res.ok) {
-          const data = (await res.json()) as { active: boolean; reason?: string };
+          const data = (await res.json()) as {
+            active: boolean;
+            reason?: string;
+          };
           setTakeover(data);
         }
       } catch {}
@@ -242,6 +279,7 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
       if (!res.ok) return;
       const list = (await res.json()) as ConnectedWindow[];
       setWindows(list);
+      const bound = new Set(boundKey.split('\u0000').filter(Boolean));
 
       // Synchronize with active surface state from server
       try {
@@ -260,6 +298,7 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
 
       if (list.length > 0 && selectedId === null) {
         const preferred =
+          list.find((w) => bound.has(w.app_name.toLowerCase())) ??
           list.find((w) => w.app_name.toLowerCase().includes('whatsapp')) ??
           list.find((w) => w.app_name.toLowerCase().includes('safari')) ??
           list[0];
@@ -268,7 +307,7 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
     } catch {
       // Ignore poll error
     }
-  }, [selectedId]);
+  }, [selectedId, boundKey]);
 
   useEffect(() => {
     void fetchWindows();
@@ -279,9 +318,8 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
     setTimestamp(Date.now());
   }, []);
 
-
   const selectedWin =
-    windows.find((w) => w.window_id === selectedId) ?? windows[0];
+    orderedWindows.find((w) => w.window_id === selectedId) ?? orderedWindows[0];
 
   const syncActiveSurface = useCallback(async (win: ConnectedWindow) => {
     try {
@@ -308,7 +346,11 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
         const res = await fetch('/api/connected-apps/cursor');
         if (!res.ok || !active) return;
         const cur = (await res.json()) as CursorTelemetryPayload | null;
-        if (cur && typeof cur.seq === 'number' && typeof cur.norm_x === 'number') {
+        if (
+          cur &&
+          typeof cur.seq === 'number' &&
+          typeof cur.norm_x === 'number'
+        ) {
           setTelemetry((prev) => (!prev || cur.seq !== prev.seq ? cur : prev));
         }
       } catch {}
@@ -380,13 +422,36 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
                   setSelectedId(Number(e.target.value));
                   refreshFrame();
                 }}
-                aria-label="Pilih aplikasi terhubung"
+                aria-label="Choose a connected app"
               >
-                {windows.map((win) => (
-                  <option key={win.window_id} value={win.window_id}>
-                    {win.app_name}
-                  </option>
-                ))}
+                {orderedWindows.filter((win) =>
+                  boundSet.has(win.app_name.toLowerCase()),
+                ).length > 0 && (
+                  <optgroup label="Bound to this Space">
+                    {orderedWindows
+                      .filter((win) => boundSet.has(win.app_name.toLowerCase()))
+                      .map((win) => (
+                        <option key={win.window_id} value={win.window_id}>
+                          {win.app_name}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+                {orderedWindows.filter(
+                  (win) => !boundSet.has(win.app_name.toLowerCase()),
+                ).length > 0 && (
+                  <optgroup label="Other windows">
+                    {orderedWindows
+                      .filter(
+                        (win) => !boundSet.has(win.app_name.toLowerCase()),
+                      )
+                      .map((win) => (
+                        <option key={win.window_id} value={win.window_id}>
+                          {win.app_name}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
               </select>
               <ChevronDown size={12} className="select-arrow" />
             </div>
@@ -409,8 +474,8 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
             type="button"
             className="icon-button"
             onClick={onClose}
-            title="Tutup Workspace"
-            aria-label="Tutup Workspace"
+            title="Close workspace"
+            aria-label="Close workspace"
           >
             <X size={16} />
           </button>
@@ -443,15 +508,26 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
             {takeover?.active && (
               <div className="takeover-alert-banner">
                 <div className="takeover-info">
-                  <strong>Kendali Manual Diperlukan:</strong>
-                  <span>{takeover.reason || 'Silakan lakukan tindakan konfirmasi di aplikasi target.'}</span>
+                  <strong>Manual takeover needed:</strong>
+                  <span>
+                    {takeover.reason ||
+                      'Confirm the required action in the target app.'}
+                  </span>
                 </div>
                 <div className="takeover-actions">
-                  <button type="button" className="takeover-btn-front" onClick={handleTakeoverActivate}>
-                    Bawa Aplikasi ke Layar Depan
+                  <button
+                    type="button"
+                    className="takeover-btn-front"
+                    onClick={handleTakeoverActivate}
+                  >
+                    Bring the app to the front
                   </button>
-                  <button type="button" className="takeover-btn-resume" onClick={handleTakeoverResume}>
-                    Saya Selesai, Lanjutkan Otomasi
+                  <button
+                    type="button"
+                    className="takeover-btn-resume"
+                    onClick={handleTakeoverResume}
+                  >
+                    I&apos;m done, resume automation
                   </button>
                 </div>
               </div>
@@ -461,7 +537,7 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
               onClick={handleCanvasClick}
               role="button"
               tabIndex={0}
-              aria-label={`Kanvas interaktif ${selectedWin.app_name}`}
+              aria-label={`Interactive canvas for ${selectedWin.app_name}`}
             >
               <div className="canvas-image-stage">
                 <RealtimeWindowCanvas
@@ -488,10 +564,16 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
               <div className="scope-bar-left">
                 <Lock size={12} />
                 <span>
-                  Locked to <strong>{selectedWin.app_name}</strong> (Window #{selectedWin.window_id}) — keep the window open behind OpenDots
+                  Locked to <strong>{selectedWin.app_name}</strong> (Window #
+                  {selectedWin.window_id}) — keep the window open behind
+                  OpenDots
                 </span>
               </div>
-              <small>Background CUA</small>
+              <small>
+                {boundSet.has(selectedWin.app_name.toLowerCase())
+                  ? 'Bound to this Space · Background CUA'
+                  : 'Background CUA'}
+              </small>
             </div>
           </>
         ) : (
@@ -499,7 +581,8 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
             <AppWindow size={28} />
             <h3>No active app windows.</h3>
             <p>
-              Open a target app (such as WhatsApp or Safari) on macOS and keep its window out of the Dock.
+              Open a target app (such as WhatsApp or Safari) on macOS and keep
+              its window out of the Dock.
             </p>
             <button type="button" onClick={() => void fetchWindows()}>
               Scan again

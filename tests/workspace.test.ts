@@ -23,6 +23,13 @@ it('persists spaces, specialist permissions, and canonical thread ownership', ()
   expect(() => store.requireThread('unknown')).toThrow();
   expect(store.dot(dot.id)?.memoryAllowed).toBe(true);
   expect(store.dot(dot.id)?.avatar).toBe('mint');
+  store.bindSpaceApp(space.id, 'Safari', 'com.apple.Safari');
+  expect(store.spaceApps(space.id)).toMatchObject([
+    { spaceId: space.id, appName: 'Safari', bundleId: 'com.apple.Safari' },
+  ]);
+  expect(() => store.bindSpaceApp('missing', 'Safari')).toThrow();
+  expect(store.unbindSpaceApp(space.id, 'Safari')).toBe(true);
+  expect(store.spaceApps(space.id)).toEqual([]);
   store.updateDot(dot.id, {
     name: 'Scout',
     instructions: 'Be concise',

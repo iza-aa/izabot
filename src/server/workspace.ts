@@ -12,6 +12,7 @@ import type {
   Dot,
   DotAvatar,
   Space,
+  SpaceApp,
 } from '../shared/types.js';
 export class WorkspaceStore {
   private db: DatabaseSync;
@@ -26,6 +27,7 @@ export class WorkspaceStore {
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS spaces(id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, createdAt INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS space_apps(spaceId TEXT NOT NULL, appName TEXT NOT NULL, bundleId TEXT, createdAt INTEGER NOT NULL, PRIMARY KEY(spaceId, appName));
       CREATE TABLE IF NOT EXISTS dots(id TEXT PRIMARY KEY, spaceId TEXT NOT NULL, name TEXT NOT NULL, instructions TEXT NOT NULL, memoryAllowed INTEGER NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS thread_bindings(id TEXT PRIMARY KEY, dotId TEXT NOT NULL, ownerId TEXT NOT NULL, title TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS task_threads(taskId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
@@ -98,6 +100,28 @@ export class WorkspaceStore {
     return this.db
       .prepare('SELECT * FROM spaces ORDER BY createdAt')
       .all() as unknown as Space[];
+  }
+  spaceApps(spaceId?: string): SpaceApp[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM space_apps ${spaceId ? 'WHERE spaceId=?' : ''} ORDER BY createdAt, appName`,
+      )
+      .all(...(spaceId ? [spaceId] : [])) as unknown as SpaceApp[];
+  }
+  bindSpaceApp(spaceId: string, appName: string, bundleId?: string | null) {
+    if (!this.spaces().some((space) => space.id === spaceId))
+      throw new Error('Space not found.');
+    this.db
+      .prepare('INSERT OR REPLACE INTO space_apps VALUES (?, ?, ?, ?)')
+      .run(spaceId, appName, bundleId ?? null, Date.now());
+    return this.spaceApps(spaceId).find((app) => app.appName === appName)!;
+  }
+  unbindSpaceApp(spaceId: string, appName: string) {
+    return (
+      this.db
+        .prepare('DELETE FROM space_apps WHERE spaceId=? AND appName=?')
+        .run(spaceId, appName).changes > 0
+    );
   }
   createSpace(name: string, description: string): Space {
     const space = {

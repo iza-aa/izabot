@@ -623,7 +623,14 @@ export function App() {
                 </div>
               )}
             </div>
-            {pane && <ConnectedAppWorkspace onClose={() => setPane(false)} />}
+            {pane && (
+              <ConnectedAppWorkspace
+                onClose={() => setPane(false)}
+                boundApps={workspace.spaceApps
+                  .filter((app) => app.spaceId === dot.spaceId)
+                  .map((app) => app.appName)}
+              />
+            )}
           </div>
         ) : (
           <main className="main-content">

@@ -105,6 +105,13 @@ export interface SetupStatus {
   voice: boolean;
   missing: string[];
 }
+export interface SpaceApp {
+  spaceId: string;
+  appName: string;
+  bundleId?: string | null;
+  createdAt: number;
+}
+
 export interface WorkspaceState {
   spaces: Space[];
   dots: Dot[];
@@ -112,4 +119,5 @@ export interface WorkspaceState {
   setup: SetupStatus;
   calls: CallReceipt[];
   taskThreads: { taskId: string; threadId: string }[];
+  spaceApps: SpaceApp[];
 }

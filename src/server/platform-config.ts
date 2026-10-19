@@ -63,20 +63,20 @@ export function setupStatus(
   activationFailed = false,
 ): SetupStatus {
   const missing = [
-    !config.intelligenceKey && INTELLIGENCE_KEY_MISSING_LABEL,
+    // intelligenceKey not required for local OMP
     !config.apiKey && 'OPENAI_API_KEY',
     !config.model && 'OPENAI_MODEL',
   ].filter((item): item is string => !!item);
   const declaredSlack = !!(
     config.slackChannel &&
     config.slackTeam &&
-    config.slackUsers.length
+    config.slackUsers?.length
   );
   slack = declaredSlack
     ? activationFailed && slack !== 'online'
       ? 'activation_failed'
       : slack
-    : config.slackChannel || config.slackTeam || config.slackUsers.length
+    : config.slackChannel || config.slackTeam || config.slackUsers?.length
       ? 'setup_required'
       : 'not_configured';
   return {
@@ -88,3 +88,24 @@ export function setupStatus(
     missing,
   };
 }
+
+export function safeFailure(error: unknown): string {
+  const name =
+    error instanceof Error &&
+    ['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(error.name)
+      ? error.name
+      : 'Error';
+  const status =
+    error !== null && typeof error === 'object' && 'status' in error
+      ? (error as { status?: unknown }).status
+      : undefined;
+  return typeof status === 'number' &&
+    Number.isInteger(status) &&
+    status >= 100 &&
+    status <= 599
+    ? `${name} (HTTP ${status})`
+    : name;
+}
+
+export const reportChannelFailure = (operation: string, errors: string[]) =>
+  console.error(`${operation}: ${errors.join('; ')}`);

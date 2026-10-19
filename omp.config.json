@@ -1,0 +1,24 @@
+{
+  "name": "izabot",
+  "version": "1.0.0",
+  "orchestrator": {
+    "model": "gemini-flash-3.8",
+    "reasoning_effort": "medium",
+    "description": "Primary conversational and decision loop orchestrator"
+  },
+  "vision": {
+    "model": "gpt-6-luna",
+    "reasoning_effort": "medium",
+    "description": "Visual grounding engine for desktop screen perception"
+  },
+  "mcpServers": {
+    "izabot-perception": {
+      "command": "node",
+      "args": ["packages/mcp-bridge/dist/index.js"],
+      "env": {
+        "LUNA_VLM_MODEL": "gpt-6-luna",
+        "LUNA_VLM_REASONING_EFFORT": "medium"
+      }
+    }
+  }
+}

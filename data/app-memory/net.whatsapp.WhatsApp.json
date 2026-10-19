@@ -1,0 +1,205 @@
+{
+  "schema_version": "1.0.0",
+  "app_metadata": {
+    "bundle_id": "net.whatsapp.WhatsApp",
+    "app_name": "WhatsApp",
+    "surface_kind": "native_app",
+    "framework_hint": "catalyst_webkit",
+    "last_verified_version": "25.8.74",
+    "updated_at": 1792082740000
+  },
+  "safety_policy": {
+    "blocked_exploration_patterns": [
+      "panggilan suara",
+      "voice call",
+      "video call",
+      "hapus chat",
+      "delete chat",
+      "keluar",
+      "log out",
+      "blokir",
+      "block",
+      "laporkan",
+      "report"
+    ],
+    "require_confirmation_roles": [
+      "AXButton:call",
+      "AXButton:video",
+      "AXMenuItem:delete"
+    ],
+    "require_confirmation_keywords": [
+      "call",
+      "telepon",
+      "video",
+      "hapus",
+      "delete",
+      "blokir"
+    ]
+  },
+  "anchors": {
+    "search_bar_input": {
+      "id": "search_bar_input",
+      "description": "Kolom pencarian kontak atau chat di panel kiri atas",
+      "zone": "LEFT_SIDEBAR",
+      "safety_tier": "SAFE_READONLY",
+      "ax_selectors": [
+        { "role": "AXSearchField", "subrole": "AXSearchField" },
+        { "role": "AXTextField", "label_contains": ["Cari", "Search", "Mulai chat"] }
+      ],
+      "ocr_keywords": ["Cari", "Search", "Cari atau mulai chat baru"],
+      "shortcut_fallback": ["Command", "f"],
+      "norm_coords": { "u": 0.165, "v": 0.105, "radius_tolerance": 0.06 },
+      "confidence": 0.98,
+      "stats": { "success_count": 42, "fail_count": 1, "last_healed_at": null }
+    },
+    "chat_list_first_result": {
+      "id": "chat_list_first_result",
+      "description": "Baris hasil pencarian teratas di daftar chat kiri",
+      "zone": "LEFT_SIDEBAR",
+      "safety_tier": "SAFE_READONLY",
+      "ax_selectors": [
+        { "role": "AXRow", "index_in_zone": 0 },
+        { "role": "AXCell", "index_in_zone": 0 }
+      ],
+      "ocr_keywords": ["Chats", "Archived"],
+      "norm_coords": { "u": 0.180, "v": 0.215, "radius_tolerance": 0.08 },
+      "confidence": 0.94,
+      "stats": { "success_count": 38, "fail_count": 2, "last_healed_at": null }
+    },
+    "message_composer_box": {
+      "id": "message_composer_box",
+      "description": "Kotak pengetikan pesan di bagian bawah panel obrolan kanan",
+      "zone": "BOTTOM_COMPOSER",
+      "safety_tier": "MUTATING_REVERSIBLE",
+      "ax_selectors": [
+        { "role": "AXTextArea", "zone": "BOTTOM_COMPOSER" },
+        { "role": "AXTextField", "label_contains": ["Ketik pesan", "Type a message", "Pesan"] }
+      ],
+      "ocr_keywords": ["Ketik pesan", "Type a message", "Tulis pesan"],
+      "norm_coords": { "u": 0.650, "v": 0.955, "radius_tolerance": 0.05 },
+      "confidence": 0.99,
+      "stats": { "success_count": 64, "fail_count": 0, "last_healed_at": null }
+    },
+    "active_chat_header": {
+      "id": "active_chat_header",
+      "description": "Judul nama kontak atau grup yang sedang aktif terbuka di header kanan atas (JANGAN DIKLIK saat hendak mengirim pesan karena akan membuka panel Info Kontak)",
+      "zone": "TOP_HEADER",
+      "safety_tier": "DESTRUCTIVE_OR_SENSITIVE",
+      "ax_selectors": [
+        { "role": "AXStaticText", "index_in_zone": 0 },
+        { "role": "AXButton", "index_in_zone": 0 }
+      ],
+      "ocr_keywords": ["online", "terakhir dilihat", "last seen", "klik di sini untuk info kontak"],
+      "norm_coords": { "u": 0.45, "v": 0.055, "radius_tolerance": 0.18 },
+      "confidence": 0.99,
+      "stats": { "success_count": 50, "fail_count": 0, "last_healed_at": null }
+    }
+  },
+  "states": {
+    "chat_list_idle": {
+      "id": "chat_list_idle",
+      "description": "Layar awal WhatsApp menampilkan daftar chat di kiri tanpa obrolan aktif di kanan",
+      "detection_rules": {
+        "required_anchors": ["search_bar_input"],
+        "forbidden_anchors": ["message_composer_box"],
+        "ocr_signature_any": ["WhatsApp untuk Mac", "Terenkripsi secara end-to-end"]
+      }
+    },
+    "search_results_open": {
+      "id": "search_results_open",
+      "description": "Kolom pencarian sedang fokus dan menampilkan daftar hasil filter kontak/pesan",
+      "detection_rules": {
+        "required_anchors": ["search_bar_input", "chat_list_first_result"],
+        "focused_anchor": "search_bar_input"
+      }
+    },
+    "conversation_open": {
+      "id": "conversation_open",
+      "description": "Ruang obrolan aktif terbuka di panel kanan dengan kotak input pesan siap diketik",
+      "detection_rules": {
+        "required_anchors": ["message_composer_box"],
+        "ocr_signature_any": ["Type a message", "Ketik pesan", "Today", "Yesterday"]
+      }
+    }
+  },
+  "transitions": [
+    {
+      "from_state": "chat_list_idle",
+      "to_state": "search_results_open",
+      "action_type": "hotkey_or_click",
+      "target_anchor": "search_bar_input",
+      "hotkey": ["Command", "f"],
+      "cost": 1
+    },
+    {
+      "from_state": "search_results_open",
+      "to_state": "conversation_open",
+      "action_type": "type_and_select",
+      "target_anchor": "chat_list_first_result",
+      "submit_key": "Return",
+      "cost": 1
+    },
+    {
+      "from_state": "conversation_open",
+      "to_state": "conversation_open",
+      "action_type": "type_and_submit",
+      "target_anchor": "message_composer_box",
+      "submit_key": "Return",
+      "cost": 1
+    }
+  ],
+  "playbooks": [
+    {
+      "id": "playbook_open_chat_by_contact",
+      "name": "Buka Obrolan Kontak atau Grup",
+      "trigger_intents": ["buka chat", "lihat pesan", "cari kontak", "tengok obrolan", "chat"],
+      "parameters": ["contact_name"],
+      "precondition_states": ["chat_list_idle", "conversation_open", "search_results_open"],
+      "expected_final_state": "conversation_open",
+      "steps": [
+        {
+          "step": 1,
+          "op": "bcu_observe",
+          "zone": "LEFT_SIDEBAR"
+        },
+        {
+          "step": 2,
+          "op": "bcu_press_key",
+          "prefer_hotkey": ["Command", "f"]
+        },
+        {
+          "step": 3,
+          "op": "bcu_type_text",
+          "text": "{{contact_name}}",
+          "submit_with_enter": true
+        },
+        {
+          "step": 4,
+          "op": "bcu_observe",
+          "expected_state": "conversation_open"
+        }
+      ]
+    },
+    {
+      "id": "playbook_send_whatsapp_message",
+      "name": "Kirim Pesan ke Kontak atau Grup",
+      "trigger_intents": ["kirim pesan", "balas chat", "chat ke", "kabari"],
+      "parameters": ["contact_name", "message_text"],
+      "precondition_states": ["chat_list_idle", "conversation_open"],
+      "expected_final_state": "conversation_open",
+      "steps": [
+        {
+          "step": 1,
+          "op": "bcu_type_text",
+          "anchor_id": "message_composer_box",
+          "text": "{{message_text}}",
+          "submit_with_enter": true
+        }
+      ]
+    }
+  ],
+  "reflexion_lessons": [
+    "Di WhatsApp, kontak yang ada di header obrolan atas kanan adalah profil chat aktif, sedangkan untuk membuka chat baru gunakan daftar chat di sebelah kiri.",
+    "Kolom pencarian WhatsApp memunculkan filter (Photos, GIFs, Links) saat fokus dalam keadaan kosong; tekan Escape untuk menutup filter tersebut setelah selesai."
+  ]
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Shield, ExternalLink, CheckCircle2, RefreshCw } from 'lucide-react';
 import type { Dot, Memory, State, WorkspaceState } from '../shared/types';
 import { ConnectionsSection } from './ConnectionsSection';
 import {
@@ -63,6 +63,43 @@ export function WorkspaceDialog({
   const [error, setError] = useState('');
   const [theme, setTheme] = useState(themePreference);
   const container = useRef<HTMLElement>(null);
+  const [hasAccessibility, setHasAccessibility] = useState<boolean>(false);
+  useEffect(() => {
+    if (dialog.type === 'settings') {
+      void fetch('/api/system/permissions')
+        .then((r) => r.json())
+        .then((data: { accessibility?: boolean }) => {
+          setHasAccessibility(Boolean(data.accessibility));
+        })
+        .catch(() => {});
+    }
+  }, [dialog.type]);
+
+  const handleGrantPermissions = async () => {
+    try {
+      await fetch('/api/system/open-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pane: 'accessibility' }),
+      });
+      await fetch('/api/system/open-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pane: 'reveal-binary' }),
+      });
+      const pollTimer = window.setInterval(async () => {
+        try {
+          const res = await fetch('/api/system/permissions');
+          const data = (await res.json()) as { accessibility?: boolean };
+          if (data.accessibility) {
+            setHasAccessibility(true);
+            window.clearInterval(pollTimer);
+          }
+        } catch {}
+      }, 1500);
+      window.setTimeout(() => window.clearInterval(pollTimer), 30000);
+    } catch {}
+  };
   useEffect(() => {
     const previous =
       document.activeElement instanceof HTMLElement
@@ -395,6 +432,60 @@ export function WorkspaceDialog({
                 Saved in this browser. System follows your device.
               </p>
             </fieldset>
+          )}
+          {dialog.type === 'settings' && (
+            <div className="permission-callout" style={{ marginTop: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <strong style={{ fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ink)' }}>
+                  <Shield size={15} color="var(--blue)" />
+                  Izin Kontrol Desktop Mac (Accessibility)
+                </strong>
+                <span className={`status ${hasAccessibility ? 'completed' : 'failed'}`}>
+                  <span />
+                  {hasAccessibility ? 'Granted' : 'Required'}
+                </span>
+              </div>
+              <p>
+                Di macOS, izin Aksesibilitas diperlukan agar Dot dapat mengirim klik dan ketikan ke jendela aplikasi di latar belakang (Background CUA).
+              </p>
+              <div className="permission-callout-actions" style={{ marginTop: '10px' }}>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void handleGrantPermissions()}
+                >
+                  <ExternalLink size={12} />
+                  Buka Accessibility & File App
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await fetch('/api/system/permissions/confirm', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({}),
+                    });
+                    setHasAccessibility(true);
+                  }}
+                >
+                  <CheckCircle2 size={12} />
+                  Saya Sudah Izinkan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void fetch('/api/system/permissions')
+                      .then((r) => r.json())
+                      .then((data: { accessibility?: boolean }) => {
+                        setHasAccessibility(Boolean(data.accessibility));
+                      });
+                  }}
+                  title="Cek ulang status izin"
+                >
+                  <RefreshCw size={11} />
+                </button>
+              </div>
+            </div>
           )}
           {dialog.type === 'settings' && (
             <div className="config-note">

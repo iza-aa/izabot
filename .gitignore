@@ -11,7 +11,8 @@ docs/superpowers/
 RESEARCH.md
 .DS_Store
 
-data/
+data/*
+!data/app-memory/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

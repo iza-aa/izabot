@@ -23,7 +23,6 @@ import { Store } from './store.js';
 import { WorkspaceStore } from './workspace.js';
 import type { PlatformConfig } from './platform-config.js';
 import { browserResponse } from './research.js';
-import { answerObserver, type SetupTelemetry } from './setup-telemetry.js';
 const channelError = () => ({
   type: EventType.RUN_ERROR,
   message:
@@ -39,8 +38,7 @@ export class DotAgent extends AbstractAgent {
     private config: PlatformConfig,
     private dotId: string,
     private channel = false,
-    private setupTelemetry?: SetupTelemetry,
-  ) {
+      ) {
     super({ agentId: dotId });
   }
   clone() {
@@ -50,8 +48,7 @@ export class DotAgent extends AbstractAgent {
       this.config,
       this.dotId,
       this.channel,
-      this.setupTelemetry,
-    );
+          );
   }
   abortRun() {
     this.controller?.abort();
@@ -66,9 +63,7 @@ export class DotAgent extends AbstractAgent {
       let timedOut = false;
       let finished = false;
       let configurationFailure = false;
-      const observe = answerObserver((event) =>
-        this.setupTelemetry?.capture(event),
-      );
+      const observe = (_event: unknown) => {};
       const timeout = setTimeout(() => {
         timedOut = true;
         observe({ type: EventType.RUN_ERROR });
@@ -102,11 +97,7 @@ export class DotAgent extends AbstractAgent {
           !this.config.model
         ) {
           configurationFailure = true;
-          this.setupTelemetry?.capture({
-            kind: 'setup_failed',
-            step: 'setup_required',
-            error_class: 'configuration_missing',
-          });
+          // telemetry omitted
           throw new Error('Intelligence and model configuration are required.');
         }
         const initialSettings = this.store.settings();

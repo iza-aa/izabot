@@ -1,10 +1,13 @@
 import { openPageLink } from './page-navigation';
 import { SpaceNav } from './SpaceNav';
 import { SpaceWorkspace } from './SpaceWorkspace';
+import { ConnectedAppWorkspace } from './ConnectedAppWorkspace';
+import { MacPermissionChecklist } from './MacPermissionChecklist';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { CopilotKitProvider } from '@copilotkit/react-core/v2';
 import {
   ArrowUp,
+  AppWindow,
   ArrowUpRight,
   BookOpen,
   Clock3,
@@ -32,7 +35,6 @@ import type {
   WorkspaceState,
 } from '../shared/types';
 import { api, ApiError, authHeaders, setToken } from './api';
-import { trackSetupStep } from './setup-telemetry';
 import {
   applyCaptureResult,
   applyRefreshResult,
@@ -124,7 +126,7 @@ export function App() {
   const [dialog, setDialog] = useState<Dialog>();
   const [mobile, setMobile] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [pane, setPane] = useState(false);
+  const [pane, setPane] = useState(true);
   const [capture, setCapture] = useState<Result>();
   const [prompt, setPrompt] = useState('');
   const [pendingPrompt, setPendingPrompt] = useState<string>();
@@ -213,7 +215,7 @@ export function App() {
     : undefined;
   useEffect(() => {
     if (!setupStep) return;
-    return trackSetupStep(setupStep);
+    return;
   }, [setupStep]);
   const chooseDot = (next: Dot) => {
     setSelectedDot(next.id);
@@ -339,6 +341,14 @@ export function App() {
         </button>
         <button aria-label="Open activity" onClick={() => setView('tasks')}>
           <Clock3 size={18} />
+        </button>
+        <button
+          aria-label="Connected Mac Workspace"
+          title="Toggle Connected Mac Workspace"
+          className={pane ? 'rail-active' : ''}
+          onClick={() => setPane(!pane)}
+        >
+          <AppWindow size={18} />
         </button>
         <button
           className="rail-settings"
@@ -654,6 +664,7 @@ export function App() {
                       Edit specialist <MoreHorizontal size={14} />
                     </button>
                   </div>
+                  <MacPermissionChecklist />
                   {!configured && (
                     <div className="setup-card">
                       <span className="setup-icon">
@@ -757,14 +768,7 @@ export function App() {
               )}
             </div>
             {pane && (
-              <ResultPane
-                key={dot.id}
-                dots={workspace.dots}
-                defaultDotId={dot.id}
-                latest={capture}
-                dotState="idle"
-                onClose={() => setPane(false)}
-              />
+              <ConnectedAppWorkspace onClose={() => setPane(false)} />
             )}
           </div>
         ) : (
@@ -956,7 +960,7 @@ export function App() {
     </div>
   );
   return configured ? (
-    <CopilotKitProvider runtimeUrl="/api/copilotkit" headers={authHeaders()}>
+    <CopilotKitProvider runtimeUrl="/api/copilotkit" headers={authHeaders()} showDevConsole={false}>
       {content}
     </CopilotKitProvider>
   ) : (

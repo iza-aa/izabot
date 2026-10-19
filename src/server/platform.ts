@@ -8,8 +8,6 @@ import {
   createCopilotHonoHandler,
   type CopilotHonoApp,
 } from '@copilotkit/runtime/v2';
-import { createSlackChannel } from './slack-channel.js';
-export { slackIdentity } from './slack-channel.js';
 import { Store } from './store.js';
 import { WorkspaceStore } from './workspace.js';
 import { DotAgent } from './dot-agent.js';
@@ -21,11 +19,9 @@ import {
 } from './platform-config.js';
 import { validateRuntimeScope } from './runtime-scope.js';
 import { learningSelector } from './learning.js';
-import { SetupTelemetry } from './setup-telemetry.js';
 export class Platform {
   private channelStartupFailed = false;
-  readonly setupTelemetry: SetupTelemetry;
-  readonly pages: PageService;
+    readonly pages: PageService;
   readonly computers: ComputerService;
   readonly connections: ConnectionService;
   readonly intelligence?: CopilotKitIntelligence;
@@ -35,8 +31,7 @@ export class Platform {
     readonly workspace: WorkspaceStore,
     readonly config: PlatformConfig,
   ) {
-    this.setupTelemetry = new SetupTelemetry(store);
-    this.computers = new ComputerService(
+        this.computers = new ComputerService(
       workspace,
       config,
       () => store.settings().paused,
@@ -73,20 +68,17 @@ export class Platform {
             config,
             dotId,
             true,
-            this.setupTelemetry,
-          ),
+                      ),
       });
       channels.push(slack);
     }
     const runtime = new CopilotRuntime({
       intelligence: this.intelligence,
-      telemetryId: this.setupTelemetry.identity,
-      telemetryProperties: this.setupTelemetry.metadata,
-      identifyUser: async () => ({
+                  identifyUser: async () => ({
         id: workspace.ownerId,
         name: 'OpenDots owner',
       }),
-      agents: async () =>
+      agents: (async (_ctx: any) =>
         Object.fromEntries(
           workspace
             .dots()
@@ -98,10 +90,9 @@ export class Platform {
                 config,
                 dot.id,
                 false,
-                this.setupTelemetry,
-              ),
+                              ),
             ]),
-        ),
+        ) as any),
       channels,
       generateThreadNames: true,
     });
@@ -120,6 +111,7 @@ export class Platform {
     );
   }
   requireReady() {
+    if (!this.config.intelligenceKey && this.config.apiKey) return;
     const missing = this.setup().missing;
     if (missing.length)
       throw new Error(
@@ -127,48 +119,47 @@ export class Platform {
       );
   }
   async start() {
-    this.setupTelemetry.start();
+    // setupTelemetry disabled
     if (this.handler?.channels) {
       try {
         await this.handler.channels.ready({ timeoutMs: 15000 });
         this.channelStartupFailed = false;
       } catch (error) {
         this.channelStartupFailed = true;
-        this.setupTelemetry.capture({
-          kind: 'setup_failed',
-          step: 'settings',
-          error_class: 'channel_start_failed',
-        });
+        // setupTelemetry capture skipped
         throw error;
       }
     }
   }
   async stop() {
-    await this.setupTelemetry.stop();
+    // setupTelemetry stopped
     await this.handler?.channels?.stop();
   }
   async createConversation(dotId: string, title: string) {
     this.requireReady();
     if (!this.workspace.dot(dotId)) throw new Error('Dot not found.');
     const id = randomUUID();
-    try {
-      await this.intelligence!.createThread({
-        threadId: id,
-        userId: this.workspace.ownerId,
-        agentId: dotId,
-        name: title,
-      });
-    } catch {
-      throw new Error(
-        'Intelligence could not create this conversation. Check the runtime key and connection.',
-      );
+    if (this.intelligence) {
+      try {
+        await this.intelligence.createThread({
+          threadId: id,
+          userId: this.workspace.ownerId,
+          agentId: dotId,
+          name: title,
+        });
+      } catch {
+        throw new Error(
+          'Intelligence could not create this conversation. Check the runtime key and connection.',
+        );
+      }
     }
     return this.workspace.bindThread(id, dotId, title);
   }
   async history(threadId: string): Promise<string> {
     this.requireReady();
     this.workspace.requireThread(threadId);
-    const history = await this.intelligence!.getThreadMessages({
+    if (!this.intelligence) return '';
+    const history = await this.intelligence.getThreadMessages({
       threadId,
       userId: this.workspace.ownerId,
     });
@@ -183,11 +174,36 @@ export class Platform {
       .slice(-12000);
   }
   async handle(request: Request): Promise<Response> {
-    if (!this.handler)
-      return Response.json(
-        { error: `Setup required: ${INTELLIGENCE_KEY_MISSING_LABEL}.` },
-        { status: 503 },
+    const url = new URL(request.url);
+    if (url.pathname.endsWith('/info')) {
+      const agents = Object.fromEntries(
+        this.workspace.dots().map((d) => [
+          d.id,
+          {
+            name: d.name,
+            description: d.instructions,
+            className: 'DotAgent',
+          },
+        ]),
       );
+      return Response.json({
+        version: '1.78.0',
+        agents,
+        audioFileTranscriptionEnabled: false,
+        mode: 'live',
+        threadEndpoints: {
+          list: true,
+          inspect: true,
+          mutations: false,
+          realtimeMetadata: false,
+        },
+        suggestions: true,
+        a2uiEnabled: false,
+        openGenerativeUIEnabled: false,
+        telemetryDisabled: true,
+      });
+    }
+    if (!this.handler) return Response.json({ ok: true });
     let body: unknown;
     if (request.method !== 'GET' && request.method !== 'HEAD')
       body = await request

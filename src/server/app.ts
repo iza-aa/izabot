@@ -1,8 +1,12 @@
 import { computerRoutes } from './computer-routes.js';
 import { connectionRoutes } from './connection-routes.js';
 import { Hono } from 'hono';
+import { stream } from 'hono/streaming';
 import { bodyLimit } from 'hono/body-limit';
 import { timingSafeEqual } from 'node:crypto';
+import { execSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
 import { z } from 'zod';
 import { Store } from './store.js';
 import { Runner } from './runner.js';
@@ -10,7 +14,21 @@ import { configured, type Config } from './research.js';
 import type { Platform } from './platform.js';
 import { VoiceService } from './voice.js';
 import { workspaceRoutes } from './workspace-routes.js';
+import { setActiveSurface, getActiveSurface, setCursorAction, getCursorAction, bumpFrameVersion } from './active-surface.js';
+import { handleOmpChatCompletion, getLatestExecutionLogs, getTakeoverState, setTakeoverState } from './omp-adapter.js';
+import {
+  getConnectedWindows,
+  captureWindowImage,
+  cuaClick,
+  cuaSendInputToWindow,
+  perceptionObserveWorkspace,
+  cuaGroundAndClick,
+  cuaClickElementOrCoords,
+  resolveBcuBaseUrl,
+} from './desktop-tools.js';
+
 const interval = z.number().int().min(60).max(31_536_000).nullable();
+
 export interface AppOptions {
   store: Store;
   runner: Runner;
@@ -19,6 +37,7 @@ export interface AppOptions {
   origin?: string | string[];
   platform?: Platform;
 }
+
 export function createApp({
   store,
   runner,
@@ -31,7 +50,7 @@ export function createApp({
   app.use(
     '/api/*',
     bodyLimit({
-      maxSize: 1_000_000,
+      maxSize: 10 * 1024 * 1024,
       onError: (c) => c.json({ error: 'Request is too large.' }, 413),
     }),
   );
@@ -90,6 +109,7 @@ export function createApp({
       return c.json({ error: 'Use application/json.' }, 415);
     await next();
   });
+
   if (platform) app.route('/api', computerRoutes(platform.computers));
   if (platform)
     app.route(
@@ -98,6 +118,7 @@ export function createApp({
     );
   const voice = platform ? new VoiceService(platform) : undefined;
   if (platform && voice) app.route('/api', workspaceRoutes(platform, voice));
+
   app.get('/api/state', (c) =>
     c.json({
       settings: store.settings(),
@@ -107,6 +128,333 @@ export function createApp({
       configured: configured(config),
     }),
   );
+
+  const permissionsFilePath = path.resolve(process.cwd(), 'data/permissions.json');
+
+  function isStoredAccessibilityGranted(): boolean {
+    if (existsSync(permissionsFilePath)) {
+      try {
+        const raw = readFileSync(permissionsFilePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed.accessibility === true) return true;
+      } catch {}
+    }
+    return false;
+  }
+
+  function saveStoredAccessibilityGranted(granted: boolean): void {
+    try {
+      const dataDir = path.dirname(permissionsFilePath);
+      if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+      const current = existsSync(permissionsFilePath)
+        ? JSON.parse(readFileSync(permissionsFilePath, 'utf-8'))
+        : {};
+      current.accessibility = granted;
+      current.updated_at = Date.now();
+      writeFileSync(permissionsFilePath, JSON.stringify(current, null, 2));
+    } catch {}
+  }
+
+  // System Readiness & Permissions Checklist API
+  // System Readiness & Permissions Checklist API
+  app.get('/api/system/permissions', async (c) => {
+    let hasAccessibility = false;
+    let hasScreenRecording = false;
+    let cuaDaemonActive = false;
+
+    // Check Background Computer Use first with auto-launch resilience
+    let bcuActive = false;
+    let bcuUrl = resolveBcuBaseUrl();
+
+    const checkBcu = async (url: string | null): Promise<boolean> => {
+      if (!url) return false;
+      try {
+        const bcuRes = await fetch(`${url}/v1/bootstrap`, { signal: AbortSignal.timeout(1500) });
+        if (bcuRes.ok) {
+          bcuActive = true;
+          const bcuData = (await bcuRes.json()) as {
+            permissions?: { accessibility?: { granted?: boolean }; screenRecording?: { granted?: boolean } };
+          };
+          hasAccessibility = Boolean(bcuData.permissions?.accessibility?.granted);
+          hasScreenRecording = Boolean(bcuData.permissions?.screenRecording?.granted);
+          return true;
+        }
+      } catch {}
+      return false;
+    };
+
+    const firstCheck = await checkBcu(bcuUrl);
+    if (!firstCheck) {
+      const bcuApp = '/Users/heizaaa/Desktop/cdev/background-computer-use/dist/BackgroundComputerUse.app';
+      if (existsSync(bcuApp)) {
+        try {
+          execSync(`open -a "${bcuApp}"`);
+          await new Promise((r) => setTimeout(r, 800));
+          bcuUrl = resolveBcuBaseUrl();
+          await checkBcu(bcuUrl);
+        } catch {}
+      }
+    }
+
+    try {
+      const res = await fetch('http://127.0.0.1:3211/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: { name: 'check_permissions', arguments: {} },
+        }),
+      });
+      if (res.ok) {
+        cuaDaemonActive = true;
+        const json = ((await res.json()) || {}) as {
+          result?: { content?: Array<{ text?: string }> };
+        };
+        const text = json.result?.content?.[0]?.text ?? '';
+        if (!bcuActive) {
+          hasAccessibility = text.includes('Accessibility: granted');
+          hasScreenRecording = text.includes('Screen Recording: granted');
+        }
+      }
+    } catch {
+      cuaDaemonActive = false;
+    }
+
+    const binaryPath = path.resolve(process.cwd(), 'src-tauri/target/debug/app');
+    const hasPerception = existsSync(path.resolve(process.cwd(), 'bin/perception-eye'));
+
+    return c.json({
+      accessibility: hasAccessibility,
+      screen_recording: hasScreenRecording,
+      cua_daemon: cuaDaemonActive || bcuActive,
+      perception_engine: hasPerception,
+      binary_path: binaryPath,
+      user_confirmed: hasAccessibility,
+    });
+  });
+
+  app.post('/api/system/permissions/confirm', (c) => {
+    saveStoredAccessibilityGranted(true);
+    return c.json({ ok: true, accessibility: true });
+  });
+
+  app.post('/api/system/permissions/reset', (c) => {
+    saveStoredAccessibilityGranted(false);
+    return c.json({ ok: true, accessibility: false });
+  });
+
+  app.post('/api/system/open-settings', async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) || {}) as {
+      pane?: 'accessibility' | 'screen-recording' | 'reveal-binary';
+      target?: 'bcu' | 'cua' | 'app';
+    };
+    try {
+      if (body.pane === 'accessibility') {
+        execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+      } else if (body.pane === 'screen-recording') {
+        execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"');
+      } else if (body.pane === 'reveal-binary') {
+        let targetPath = path.resolve(process.cwd(), 'src-tauri/target/debug/app');
+        if (body.target === 'bcu') {
+          targetPath = '/Users/heizaaa/Desktop/cdev/background-computer-use/dist/BackgroundComputerUse.app';
+        } else if (body.target === 'cua') {
+          targetPath = '/Users/heizaaa/Desktop/cdev/cua-spaces-lab/libs/cua-spacesd/target/release/cua-spacesd';
+        }
+        if (existsSync(targetPath)) {
+          execSync(`open -R "${targetPath}"`);
+          execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+        }
+      }
+      return c.json({ ok: true });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: msg }, 500);
+    }
+  });
+
+  app.post('/v1/chat/completions', handleOmpChatCompletion);
+  app.post('/api/v1/chat/completions', handleOmpChatCompletion);
+
+  // Connected Apps & Window Canvas API
+  app.get('/api/connected-apps/windows', async (c) => {
+    const windows = await getConnectedWindows();
+    return c.json(windows);
+  });
+
+  app.post('/api/connected-apps/active-surface', async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) || {}) as {
+      window_id?: number;
+      pid?: number;
+      app_name?: string;
+      title?: string;
+      width?: number;
+      height?: number;
+    };
+    if (!body.window_id) {
+      return c.json({ error: 'window_id is required' }, 400);
+    }
+    setActiveSurface({
+      window_id: body.window_id,
+      pid: body.pid ?? 0,
+      app_name: body.app_name ?? 'Active Application',
+      title: body.title ?? body.app_name ?? '',
+      width: body.width ?? 1280,
+      height: body.height ?? 800,
+      updated_at: Date.now(),
+    });
+    return c.json({ ok: true, activeSurface: getActiveSurface() });
+  });
+
+  app.get('/api/connected-apps/active-surface', (c) => {
+    return c.json(getActiveSurface());
+  });
+  app.get('/api/connected-apps/cursor', (c) => {
+    return c.json(getCursorAction() ?? { x: null, y: null, is_clicking: false });
+  });
+  app.get('/api/connected-apps/logs', (c) => {
+    return c.json(getLatestExecutionLogs());
+  });
+  app.get('/api/connected-apps/takeover/status', (c) => {
+    return c.json(getTakeoverState());
+  });
+  app.post('/api/connected-apps/takeover/activate', async (c) => {
+    const state = getTakeoverState();
+    if (state.app_name) {
+      try {
+        execSync(`osascript -e 'tell application "${state.app_name}" to activate'`);
+      } catch {}
+    }
+    return c.json({ ok: true, activated: true });
+  });
+  app.post('/api/connected-apps/takeover/resume', async (c) => {
+    const state = getTakeoverState();
+    setTakeoverState({ active: false });
+    try {
+      execSync(`osascript -e 'tell application "OpenDots" to activate'`);
+    } catch {}
+    if (state.window_id) {
+      bumpFrameVersion(state.window_id);
+    }
+    return c.json({ ok: true, resumed: true });
+  });
+  app.get('/api/connected-apps/capture/:windowId', (c) => {
+    const windowId = parseInt(c.req.param('windowId'), 10);
+    if (!windowId || isNaN(windowId)) {
+      return c.json({ error: 'Invalid window ID' }, 400);
+    }
+    const imageBuf = captureWindowImage(windowId);
+    if (!imageBuf) {
+      return c.json({ error: 'Failed to capture window' }, 404);
+    }
+    return new Response(new Uint8Array(imageBuf), {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      },
+    });
+  });
+
+  app.get('/api/connected-apps/stream/:windowId', (c) => {
+    const windowId = parseInt(c.req.param('windowId'), 10);
+    if (!windowId || isNaN(windowId)) {
+      return c.json({ error: 'Invalid window ID' }, 400);
+    }
+
+    c.header('Content-Type', 'multipart/x-mixed-replace; boundary=frame');
+    c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    c.header('Connection', 'close');
+    c.header('Pragma', 'no-cache');
+
+    return stream(c, async (streamWriter) => {
+      let active = true;
+
+      streamWriter.onAbort(() => {
+        active = false;
+      });
+
+      while (active) {
+        try {
+          const imageBuf = captureWindowImage(windowId);
+          if (imageBuf && imageBuf.length > 0) {
+            await streamWriter.write(Buffer.from(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${imageBuf.length}\r\n\r\n`));
+            await streamWriter.write(imageBuf);
+            await streamWriter.write(Buffer.from('\r\n'));
+          }
+          await new Promise((r) => setTimeout(r, 120));
+        } catch {
+          active = false;
+          break;
+        }
+      }
+    });
+  });
+
+  app.post('/api/connected-apps/observe', async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) || {}) as {
+      window_id?: number;
+      query?: string;
+      provider?: 'apple_vision' | 'vlm_luna' | 'hybrid';
+      settle_delay_ms?: number;
+    };
+    const result = await perceptionObserveWorkspace({
+      windowId: body.window_id,
+      query: body.query,
+      provider: body.provider ?? 'hybrid',
+      settleDelayMs: body.settle_delay_ms ?? 300,
+    });
+    return c.json(result);
+  });
+
+  app.post('/api/connected-apps/ground-and-click', async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) || {}) as {
+      query?: string;
+      window_id?: number;
+    };
+    if (!body.query) {
+      return c.json({ error: 'Query is required' }, 400);
+    }
+    const result = await cuaClickElementOrCoords({
+      query: body.query,
+      windowId: body.window_id,
+    });
+    return c.json(result);
+  });
+
+  app.post('/api/connected-apps/click', async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) || {}) as {
+      x?: number;
+      y?: number;
+      window_id?: number;
+    };
+    const x = body.x ?? 100;
+    const y = body.y ?? 100;
+    const res = await cuaClick(x, y, body.window_id);
+    return c.json({ ok: true, result: res });
+  });
+
+  app.post('/api/connected-apps/send-input', async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) || {}) as {
+      window_id?: number;
+      pid?: number;
+      appName?: string;
+      text?: string;
+      submit?: boolean;
+    };
+    if (!body.text?.trim()) {
+      return c.json({ error: 'Text cannot be empty' }, 400);
+    }
+    const report = await cuaSendInputToWindow({
+      windowId: body.window_id,
+      pid: body.pid,
+      appName: body.appName,
+      text: body.text.trim(),
+      submitWithEnter: body.submit ?? true,
+    });
+    return c.json({ ok: true, report });
+  });
+
   app.post('/api/tasks', async (c) => {
     const parsed = z
       .object({

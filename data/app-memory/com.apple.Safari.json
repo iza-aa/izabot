@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0.0",
+  "app_metadata": {
+    "bundle_id": "com.apple.Safari",
+    "app_name": "Safari",
+    "surface_kind": "web_browser",
+    "framework_hint": "appkit_webkit",
+    "last_verified_version": "18.0",
+    "updated_at": 1792082740000
+  },
+  "safety_policy": {
+    "blocked_exploration_patterns": [
+      "clear history",
+      "hapus riwayat",
+      "delete cookies",
+      "empty cache",
+      "tutup semua tab",
+      "quit safari"
+    ],
+    "require_confirmation_roles": [
+      "AXMenuItem:clear_history"
+    ],
+    "require_confirmation_keywords": [
+      "hapus riwayat",
+      "clear history"
+    ]
+  },
+  "anchors": {
+    "address_bar": {
+      "id": "address_bar",
+      "description": "Bilah alamat URL dan pencarian Safari",
+      "zone": "TOP_HEADER",
+      "safety_tier": "SAFE_READONLY",
+      "shortcut_fallback": ["Command", "l"],
+      "norm_coords": { "u": 0.500, "v": 0.055, "radius_tolerance": 0.10 },
+      "confidence": 0.99,
+      "stats": { "success_count": 80, "fail_count": 0, "last_healed_at": null }
+    },
+    "web_content_area": {
+      "id": "web_content_area",
+      "description": "Area tampilan halaman web utama di Safari",
+      "zone": "MAIN_STAGE",
+      "safety_tier": "SAFE_READONLY",
+      "norm_coords": { "u": 0.500, "v": 0.500, "radius_tolerance": 0.35 },
+      "confidence": 0.99,
+      "stats": { "success_count": 95, "fail_count": 0, "last_healed_at": null }
+    }
+  },
+  "states": {
+    "browser_page_loaded": {
+      "id": "browser_page_loaded",
+      "description": "Halaman web aktif termuat di Safari",
+      "detection_rules": {
+        "required_anchors": ["address_bar", "web_content_area"]
+      }
+    }
+  },
+  "transitions": [
+    {
+      "from_state": "browser_page_loaded",
+      "to_state": "browser_page_loaded",
+      "action_type": "navigate_url",
+      "target_anchor": "address_bar",
+      "cost": 1
+    }
+  ],
+  "playbooks": [
+    {
+      "id": "playbook_navigate_url",
+      "name": "Navigasikan Tab Browser ke URL",
+      "trigger_intents": ["buka", "kunjungi", "cari di web", "open"],
+      "parameters": ["url"],
+      "precondition_states": ["browser_page_loaded"],
+      "expected_final_state": "browser_page_loaded",
+      "steps": [
+        {
+          "step": 1,
+          "op": "navigate_browser",
+          "text": "{{url}}"
+        }
+      ]
+    }
+  ],
+  "reflexion_lessons": [
+    "Navigasi tab browser Safari paling cepat dan stabil menggunakan perintah background AppleScript tanpa mengaktifkan jendela ke depan."
+  ]
+}

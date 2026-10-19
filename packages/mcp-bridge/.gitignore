@@ -1,0 +1,7 @@
+# Node.js and package builds
+node_modules/
+dist/
+packages/*/node_modules/
+packages/*/dist/
+packages/*/.build/
+packages/*/.swiftpm/

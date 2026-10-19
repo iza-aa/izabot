@@ -18,6 +18,7 @@ import {
 } from '@copilotkit/react-core/v2';
 import {
   FilePlus,
+  AppWindow,
   ArrowUp,
   Clock3,
   Link2,
@@ -97,7 +98,7 @@ export function Chat({
   const [source, setSource] = useState('');
   const [sourceOpen, setSourceOpen] = useState(false);
   const [error, setError] = useState('');
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(true);
   const [running, setRunning] = useState(false);
   const voice = useVoice(thread.id, onSaved, agent.messages.at(-1)?.id);
   const sent = useRef(false);
@@ -145,11 +146,25 @@ export function Chat({
     setSource('');
     setSourceOpen(false);
     try {
-      const result = await copilotkit.runAgent({ agent });
-      if (!result.newMessages.some((message) => message.role === 'assistant'))
-        throw new Error(
-          'The current turn returned no response. Check the runtime connection and retry.',
-        );
+      const allMsgs = agent.messages.map((m) => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      }));
+      const res = await fetch('/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [...allMsgs, { role: 'user', content: contextualMessage(text, pageContext) }],
+        }),
+      });
+      if (!res.ok) throw new Error('OMP HTTP error: ' + res.status);
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content ?? 'OMP selesai memproses.';
+      agent.addMessage({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: reply,
+      });
       onSaved();
     } catch (e) {
       setError(
@@ -316,6 +331,16 @@ export function Chat({
               <PhoneOff size={18} />
             )}
           </button>
+          {onComputer && (
+            <button
+              className="icon-button"
+              aria-label="Connected Workspace"
+              title="Toggle Connected Mac Workspace"
+              onClick={onComputer}
+            >
+              <AppWindow size={18} />
+            </button>
+          )}
         </div>
       </header>
       {pageContext && (
@@ -383,11 +408,9 @@ export function Chat({
           )}
         </div>
       )}
-      <CallView
-        key={voice.status === 'idle' ? 'idle' : 'call'}
-        dot={dot}
-        voice={voice}
-      />
+      {/* Voice call view disabled for now */ false && (
+        <CallView key={voice.status === 'idle' ? 'idle' : 'call'} dot={dot} voice={voice} />
+      )}
       <form
         className="chat-composer"
         onSubmit={(e) => {

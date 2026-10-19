@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Shield, ExternalLink, CheckCircle2, RefreshCw } from 'lucide-react';
-import type { Dot, Memory, State, WorkspaceState } from '../shared/types';
+import {
+  DOT_AVATARS,
+  type Dot,
+  type DotAvatar,
+  type Memory,
+  type State,
+  type WorkspaceState,
+} from '../shared/types';
 import { ConnectionsSection } from './ConnectionsSection';
+import { Mascot } from './Mascot';
 import {
   setThemePreference,
   themePreference,
@@ -40,6 +48,9 @@ export function WorkspaceDialog({
     dialog.type === 'dot'
       ? (dialog.dot?.memoryAllowed ?? true)
       : state.settings.memoryAllowed,
+  );
+  const [avatar, setAvatar] = useState<DotAvatar | ''>(
+    dialog.type === 'dot' ? (dialog.dot?.avatar ?? '') : '',
   );
   const [spaceIds, setSpaceIds] = useState(
     dialog.type === 'dot' ? (dialog.dot?.spaceIds ?? [dialog.spaceId]) : [],
@@ -182,6 +193,7 @@ export function WorkspaceDialog({
                 name,
                 instructions: text,
                 memoryAllowed: memory,
+                avatar: avatar || null,
                 learningContainerId: learningContainer.trim() || null,
                 skillDeliveryEnabled: skillDelivery,
               };
@@ -225,6 +237,46 @@ export function WorkspaceDialog({
                 required
               />
             </>
+          )}
+          {dialog.type === 'dot' && (
+            <fieldset className="character-picker">
+              <legend>Character</legend>
+              <p className="muted">
+                Pick the look your Dot wears across chats and Spaces.
+              </p>
+              <div
+                className="character-options"
+                role="group"
+                aria-label="Character appearance"
+              >
+                <button
+                  type="button"
+                  className={avatar === '' ? 'selected' : ''}
+                  aria-pressed={avatar === ''}
+                  onClick={() => setAvatar('')}
+                >
+                  <Mascot identity={dialog.dot?.id ?? name} small decorative />
+                  <span>Auto</span>
+                </button>
+                {DOT_AVATARS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={avatar === option ? 'selected' : ''}
+                    aria-pressed={avatar === option}
+                    onClick={() => setAvatar(option)}
+                  >
+                    <Mascot
+                      identity={dialog.dot?.id ?? name}
+                      avatar={option}
+                      small
+                      decorative
+                    />
+                    <span>{option}</span>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
           )}
           {dialog.type !== 'settings' && (
             <>
@@ -417,21 +469,42 @@ export function WorkspaceDialog({
           )}
           {dialog.type === 'settings' && (
             <div className="permission-callout" style={{ marginTop: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <strong style={{ fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ink)' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px',
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize: '12.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: 'var(--ink)',
+                  }}
+                >
                   <Shield size={15} color="var(--blue)" />
                   macOS desktop control (Accessibility)
                 </strong>
-                <span className={`status ${hasAccessibility ? 'completed' : 'failed'}`}>
+                <span
+                  className={`status ${hasAccessibility ? 'completed' : 'failed'}`}
+                >
                   <span />
                   {hasAccessibility ? 'Granted' : 'Required'}
                 </span>
               </div>
               <p>
-                macOS needs Accessibility permission so a Dot can send clicks and
-                keystrokes to app windows in the background (Background CUA).
+                macOS needs Accessibility permission so a Dot can send clicks
+                and keystrokes to app windows in the background (Background
+                CUA).
               </p>
-              <div className="permission-callout-actions" style={{ marginTop: '10px' }}>
+              <div
+                className="permission-callout-actions"
+                style={{ marginTop: '10px' }}
+              >
                 <button
                   type="button"
                   className="primary"
@@ -451,8 +524,7 @@ export function WorkspaceDialog({
                     setHasAccessibility(true);
                   }}
                 >
-                  <CheckCircle2 size={12} />
-                  I have allowed it
+                  <CheckCircle2 size={12} />I have allowed it
                 </button>
                 <button
                   type="button"

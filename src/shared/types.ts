@@ -64,6 +64,9 @@ export interface Space {
   description: string;
   createdAt: number;
 }
+export const DOT_AVATARS = ['blue', 'mint', 'orange', 'purple'] as const;
+export type DotAvatar = (typeof DOT_AVATARS)[number];
+
 export interface Dot {
   id: string;
   /** Default destination for saved pages, not ownership. */
@@ -72,6 +75,7 @@ export interface Dot {
   name: string;
   instructions: string;
   memoryAllowed: boolean;
+  avatar?: DotAvatar | null;
   createdAt: number;
   learningContainerId?: string | null;
   skillDeliveryEnabled?: boolean;

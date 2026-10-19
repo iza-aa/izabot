@@ -1,7 +1,11 @@
-const characters = ['blue', 'mint', 'orange', 'purple'] as const;
+import { DOT_AVATARS } from '../shared/types';
 
-/** Stable identity keeps each specialist recognizable across views and reloads. */
-function characterFor(identity?: string) {
+const characters = DOT_AVATARS;
+
+/** Stable identity keeps each Dot recognizable across views and reloads. */
+function characterFor(identity?: string, avatar?: string | null) {
+  if (avatar && (characters as readonly string[]).includes(avatar))
+    return avatar;
   if (!identity) return characters[0];
   let hash = 0;
   for (const character of identity)
@@ -13,12 +17,14 @@ export function Mascot({
   state = 'idle',
   small = false,
   identity,
+  avatar,
   name = 'Dot',
   decorative = false,
 }: {
   state?: string;
   small?: boolean;
   identity?: string;
+  avatar?: string | null;
   name?: string;
   decorative?: boolean;
 }) {
@@ -26,7 +32,7 @@ export function Mascot({
     <span className={`mascot ${state} ${small ? 'small' : ''}`}>
       <img
         className="dot-body"
-        src={`/dots/${characterFor(identity)}.png`}
+        src={`/dots/${characterFor(identity, avatar)}.png`}
         alt={decorative ? '' : `${name} is ${state}`}
         width={512}
         height={512}

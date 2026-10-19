@@ -144,18 +144,23 @@ export function Chat({
     try {
       const allMsgs = agent.messages.map((m) => ({
         role: m.role,
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        content:
+          typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
       }));
       const res = await fetch('/api/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...allMsgs, { role: 'user', content: contextualMessage(text, pageContext) }],
+          messages: [
+            ...allMsgs,
+            { role: 'user', content: contextualMessage(text, pageContext) },
+          ],
         }),
       });
       if (!res.ok) throw new Error('OMP HTTP error: ' + res.status);
       const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content ?? 'OMP selesai memproses.';
+      const reply =
+        data.choices?.[0]?.message?.content ?? 'OMP selesai memproses.';
       agent.addMessage({
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -257,6 +262,7 @@ export function Chat({
       <header className="chat-persona">
         <Mascot
           identity={dot.id}
+          avatar={dot.avatar}
           name={dot.name}
           small
           state={running ? 'working' : paused ? 'paused' : 'idle'}

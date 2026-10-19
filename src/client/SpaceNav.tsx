@@ -62,7 +62,13 @@ export function SpaceNav({
                 aria-current={selectedDot === item.id ? 'page' : undefined}
                 onClick={() => onDot(item)}
               >
-                <Mascot identity={item.id} name={item.name} small decorative />
+                <Mascot
+                  identity={item.id}
+                  avatar={item.avatar}
+                  name={item.name}
+                  small
+                  decorative
+                />
                 <span>{item.name}</span>
               </button>
               <button

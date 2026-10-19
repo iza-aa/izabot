@@ -332,9 +332,7 @@ export function App() {
               onEditDot={(item) =>
                 setDialog({ type: 'dot', dot: item, spaceId: item.spaceId })
               }
-              onNewDot={() =>
-                setDialog({ type: 'dot', spaceId: space.id })
-              }
+              onNewDot={() => setDialog({ type: 'dot', spaceId: space.id })}
             />
           ))}
         </nav>
@@ -530,6 +528,7 @@ export function App() {
                   <div className="empty-chat-persona">
                     <Mascot
                       identity={dot.id}
+                      avatar={dot.avatar}
                       name={dot.name}
                       state={state.settings.paused ? 'paused' : 'idle'}
                     />
@@ -624,9 +623,7 @@ export function App() {
                 </div>
               )}
             </div>
-            {pane && (
-              <ConnectedAppWorkspace onClose={() => setPane(false)} />
-            )}
+            {pane && <ConnectedAppWorkspace onClose={() => setPane(false)} />}
           </div>
         ) : (
           <main className="main-content">
@@ -752,9 +749,7 @@ export function App() {
                       }
                       onSchedule={() =>
                         setScheduleDraft(
-                          String(
-                            (taskDetail.task.intervalSeconds ?? 0) / 60,
-                          ),
+                          String((taskDetail.task.intervalSeconds ?? 0) / 60),
                         )
                       }
                     />
@@ -825,7 +820,11 @@ export function App() {
     </div>
   );
   return configured ? (
-    <CopilotKitProvider runtimeUrl="/api/copilotkit" headers={authHeaders()} showDevConsole={false}>
+    <CopilotKitProvider
+      runtimeUrl="/api/copilotkit"
+      headers={authHeaders()}
+      showDevConsole={false}
+    >
       {content}
     </CopilotKitProvider>
   ) : (

@@ -7,11 +7,13 @@ import {
   learningContainerIdSchema,
   validateLearningSettings,
 } from '../shared/learning.js';
+import { DOT_AVATARS } from '../shared/types.js';
 const dotSchema = z
   .object({
     name: z.string().trim().min(1).max(40),
     instructions: z.string().trim().min(3).max(2000),
     memoryAllowed: z.boolean(),
+    avatar: z.enum(DOT_AVATARS).nullable().optional(),
     learningContainerId: learningContainerIdSchema.optional(),
     skillDeliveryEnabled: z.boolean().optional(),
     spaceIds: z.array(z.string().min(1)).min(1).max(100).optional(),
@@ -86,6 +88,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         data.data.spaceIds,
         data.data.learningContainerId,
         data.data.skillDeliveryEnabled,
+        data.data.avatar ?? null,
       ),
       201,
     );

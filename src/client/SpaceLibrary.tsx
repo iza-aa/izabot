@@ -93,10 +93,7 @@ export function SpaceLibrary({
     ),
   );
   return (
-    <section
-      className="space-library"
-      aria-label={`${space.name} workplace`}
-    >
+    <section className="space-library" aria-label={`${space.name} workplace`}>
       <header className="library-heading">
         <div>
           <span className="library-eyebrow">SPACE WORKPLACE</span>
@@ -117,7 +114,12 @@ export function SpaceLibrary({
       <div className="workplace-workers">
         {dots.map((dot) => (
           <article className="workplace-worker" key={dot.id}>
-            <Mascot identity={dot.id} name={dot.name} small />
+            <Mascot
+              identity={dot.id}
+              avatar={dot.avatar}
+              name={dot.name}
+              small
+            />
             <div className="workplace-worker-body">
               <h3>{dot.name}</h3>
               <p>{dot.instructions}</p>

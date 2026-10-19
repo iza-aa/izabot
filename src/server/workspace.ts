@@ -6,7 +6,13 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateLearningSettings } from '../shared/learning.js';
-import type { CallReceipt, Conversation, Dot, Space } from '../shared/types.js';
+import type {
+  CallReceipt,
+  Conversation,
+  Dot,
+  DotAvatar,
+  Space,
+} from '../shared/types.js';
 export class WorkspaceStore {
   private db: DatabaseSync;
   readonly pages: Pages;
@@ -27,6 +33,7 @@ export class WorkspaceStore {
     for (const [table, column, definition] of [
       ['dots', 'learningContainerId', 'TEXT'],
       ['dots', 'skillDeliveryEnabled', 'INTEGER NOT NULL DEFAULT 0'],
+      ['dots', 'avatar', 'TEXT'],
       ['thread_bindings', 'learningContainerId', 'TEXT'],
     ]) {
       if (
@@ -131,6 +138,7 @@ export class WorkspaceStore {
     spaceIds: string[] = [spaceId],
     learningContainerId: string | null = null,
     skillDeliveryEnabled = false,
+    avatar: DotAvatar | null = null,
   ): Dot {
     this.validateSpaceAccess(spaceId, spaceIds);
     validateLearningSettings(learningContainerId, skillDeliveryEnabled);
@@ -141,6 +149,7 @@ export class WorkspaceStore {
       name,
       instructions,
       memoryAllowed,
+      avatar,
       learningContainerId,
       skillDeliveryEnabled,
       createdAt: Date.now(),
@@ -149,7 +158,7 @@ export class WorkspaceStore {
     try {
       this.db
         .prepare(
-          'INSERT INTO dots (id, spaceId, name, instructions, memoryAllowed, createdAt, learningContainerId, skillDeliveryEnabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO dots (id, spaceId, name, instructions, memoryAllowed, createdAt, learningContainerId, skillDeliveryEnabled, avatar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           dot.id,
@@ -160,6 +169,7 @@ export class WorkspaceStore {
           dot.createdAt,
           learningContainerId,
           +skillDeliveryEnabled,
+          avatar,
         );
       for (const id of dot.spaceIds)
         this.db.prepare('INSERT INTO dot_spaces VALUES (?, ?)').run(dot.id, id);
@@ -189,6 +199,7 @@ export class WorkspaceStore {
       spaceIds?: string[];
       learningContainerId?: string | null;
       skillDeliveryEnabled?: boolean;
+      avatar?: DotAvatar | null;
     },
   ): Dot {
     const current = this.dot(id);
@@ -196,6 +207,8 @@ export class WorkspaceStore {
     const defaultSpace = patch.spaceId ?? current.spaceId;
     const spaceIds = patch.spaceIds ?? current.spaceIds;
     this.validateSpaceAccess(defaultSpace, spaceIds);
+    const avatar =
+      patch.avatar === undefined ? (current.avatar ?? null) : patch.avatar;
     const learningContainerId =
       patch.learningContainerId === undefined
         ? (current.learningContainerId ?? null)
@@ -207,7 +220,7 @@ export class WorkspaceStore {
     try {
       this.db
         .prepare(
-          'UPDATE dots SET name=?, instructions=?, memoryAllowed=?, learningContainerId=?, skillDeliveryEnabled=? WHERE id=?',
+          'UPDATE dots SET name=?, instructions=?, memoryAllowed=?, learningContainerId=?, skillDeliveryEnabled=?, avatar=? WHERE id=?',
         )
         .run(
           patch.name,
@@ -215,6 +228,7 @@ export class WorkspaceStore {
           +patch.memoryAllowed,
           learningContainerId,
           +skillDeliveryEnabled,
+          avatar,
           id,
         );
       this.db

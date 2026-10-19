@@ -7,12 +7,29 @@ import { WorkspaceStore } from '../src/server/workspace.js';
 it('persists spaces, specialist permissions, and canonical thread ownership', () => {
   const store = new WorkspaceStore(':memory:', 'owner');
   const space = store.createSpace('Design', 'Design decisions');
-  const dot = store.createDot(space.id, 'Scout', 'Be concise', true);
+  const dot = store.createDot(
+    space.id,
+    'Scout',
+    'Be concise',
+    true,
+    [space.id],
+    null,
+    false,
+    'mint',
+  );
   store.bindThread('thread-1', dot.id, 'Design research');
   expect(store.requireThread('thread-1', dot.id).ownerId).toBe('owner');
   expect(() => store.requireThread('thread-1', 'another-dot')).toThrow();
   expect(() => store.requireThread('unknown')).toThrow();
   expect(store.dot(dot.id)?.memoryAllowed).toBe(true);
+  expect(store.dot(dot.id)?.avatar).toBe('mint');
+  store.updateDot(dot.id, {
+    name: 'Scout',
+    instructions: 'Be concise',
+    memoryAllowed: true,
+    avatar: 'purple',
+  });
+  expect(store.dot(dot.id)?.avatar).toBe('purple');
   store.close();
 });
 it('rejects a dot in a nonexistent space and does not rebind an existing thread', () => {

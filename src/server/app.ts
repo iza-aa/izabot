@@ -10,7 +10,6 @@ import path from 'node:path';
 import { z } from 'zod';
 import { Store } from './store.js';
 import { Runner } from './runner.js';
-import { configured, type Config } from './research.js';
 import type { Platform } from './platform.js';
 import { VoiceService } from './voice.js';
 import { workspaceRoutes } from './workspace-routes.js';
@@ -32,7 +31,6 @@ const interval = z.number().int().min(60).max(31_536_000).nullable();
 export interface AppOptions {
   store: Store;
   runner: Runner;
-  config: Config;
   ownerToken?: string;
   origin?: string | string[];
   platform?: Platform;
@@ -41,7 +39,6 @@ export interface AppOptions {
 export function createApp({
   store,
   runner,
-  config,
   ownerToken,
   origin,
   platform,
@@ -124,12 +121,25 @@ export function createApp({
       settings: store.settings(),
       tasks: store.tasks(),
       memories: store.memories(),
-      mode: config.mode,
-      configured: configured(config),
     }),
   );
 
-  const permissionsFilePath = path.resolve(process.cwd(), 'data/permissions.json');
+  const permissionsFilePath = path.resolve(
+    process.env.PERMISSIONS_PATH ?? 'data/permissions.json',
+  );
+  const bcuAppPath =
+    process.env.BCU_APP_PATH ??
+    '/Users/heizaaa/Desktop/cdev/background-computer-use/dist/BackgroundComputerUse.app';
+  const tauriBinaryPath =
+    process.env.TAURI_BINARY_PATH ??
+    path.resolve(process.cwd(), 'src-tauri/target/debug/app');
+  const cuaSpacesdPath =
+    process.env.CUA_SPACESD_PATH ??
+    '/Users/heizaaa/Desktop/cdev/cua-spaces-lab/libs/cua-spacesd/target/release/cua-spacesd';
+  const cuaMcpUrl = process.env.CUA_MCP_URL ?? 'http://127.0.0.1:3211/mcp';
+  const perceptionBinPath =
+    process.env.PERCEPTION_BIN_PATH ??
+    path.resolve(process.cwd(), 'bin/perception-eye');
 
   function isStoredAccessibilityGranted(): boolean {
     if (existsSync(permissionsFilePath)) {
@@ -185,7 +195,7 @@ export function createApp({
 
     const firstCheck = await checkBcu(bcuUrl);
     if (!firstCheck) {
-      const bcuApp = '/Users/heizaaa/Desktop/cdev/background-computer-use/dist/BackgroundComputerUse.app';
+      const bcuApp = bcuAppPath;
       if (existsSync(bcuApp)) {
         try {
           execSync(`open -a "${bcuApp}"`);
@@ -197,7 +207,7 @@ export function createApp({
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:3211/mcp', {
+      const res = await fetch(cuaMcpUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -222,8 +232,8 @@ export function createApp({
       cuaDaemonActive = false;
     }
 
-    const binaryPath = path.resolve(process.cwd(), 'src-tauri/target/debug/app');
-    const hasPerception = existsSync(path.resolve(process.cwd(), 'bin/perception-eye'));
+    const binaryPath = tauriBinaryPath;
+    const hasPerception = existsSync(perceptionBinPath);
 
     return c.json({
       accessibility: hasAccessibility,
@@ -256,11 +266,11 @@ export function createApp({
       } else if (body.pane === 'screen-recording') {
         execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"');
       } else if (body.pane === 'reveal-binary') {
-        let targetPath = path.resolve(process.cwd(), 'src-tauri/target/debug/app');
+        let targetPath = tauriBinaryPath;
         if (body.target === 'bcu') {
-          targetPath = '/Users/heizaaa/Desktop/cdev/background-computer-use/dist/BackgroundComputerUse.app';
+          targetPath = bcuAppPath;
         } else if (body.target === 'cua') {
-          targetPath = '/Users/heizaaa/Desktop/cdev/cua-spaces-lab/libs/cua-spacesd/target/release/cua-spacesd';
+          targetPath = cuaSpacesdPath;
         }
         if (existsSync(targetPath)) {
           execSync(`open -R "${targetPath}"`);
@@ -472,8 +482,6 @@ export function createApp({
         },
         400,
       );
-    if (!store.settings().researchAllowed)
-      return c.json({ error: 'Research is disabled in Settings.' }, 403);
     if (platform) {
       if (platform.setup().missing.length)
         return c.json(
@@ -512,8 +520,6 @@ export function createApp({
       .strict()
       .safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: 'Unknown task action.' }, 400);
-    if (parsed.data.action === 'run' && !store.settings().researchAllowed)
-      return c.json({ error: 'Research is disabled in Settings.' }, 403);
     const task = store.action(c.req.param('id'), parsed.data.action);
     if (parsed.data.action !== 'run') runner.abort(c.req.param('id'));
     return task ? c.json(task) : c.json({ error: 'Task not found.' }, 404);
@@ -536,7 +542,6 @@ export function createApp({
       .object({
         name: z.string().trim().min(1).max(40).optional(),
         paused: z.boolean().optional(),
-        researchAllowed: z.boolean().optional(),
         memoryAllowed: z.boolean().optional(),
       })
       .strict()
@@ -544,11 +549,7 @@ export function createApp({
     if (!parsed.success) return c.json({ error: 'Invalid settings.' }, 400);
     const previous = store.settings();
     const settings = store.updateSettings(parsed.data);
-    if (
-      settings.paused ||
-      !settings.researchAllowed ||
-      previous.memoryAllowed !== settings.memoryAllowed
-    )
+    if (settings.paused || previous.memoryAllowed !== settings.memoryAllowed)
       runner.abortAll();
     if (settings.paused) voice?.abortAll();
     else void voice?.resumePending();
@@ -585,6 +586,7 @@ export function createApp({
       ? c.json({ ok: true })
       : c.json({ error: 'Memory not found.' }, 404),
   );
+  app.notFound((c) => c.json({ error: 'Not found.' }, 404));
   app.onError((error, c) => {
     console.error('API request failed:', error.name);
     return c.json(

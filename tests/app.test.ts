@@ -2,18 +2,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/server/app.js';
 import { Store } from '../src/server/store.js';
 import { Runner } from '../src/server/runner.js';
-import type { Config } from '../src/server/research.js';
 import { resolveAppOrigins } from '../src/server/app-origin.js';
 const stores: Store[] = [];
-const config: Config = { mode: 'sample', baseUrl: 'https://api.openai.com/v1' };
 function fixture(token?: string, origin?: string | string[]) {
   const store = new Store(':memory:');
   stores.push(store);
-  const runner = new Runner(store, config);
+  const runner = new Runner(store, async () => ({ text: 'Done.' }));
   return {
     store,
     runner,
-    app: createApp({ store, runner, config, ownerToken: token, origin }),
+    app: createApp({ store, runner, ownerToken: token, origin }),
   };
 }
 const json = (body: unknown) => ({
@@ -207,8 +205,8 @@ describe('API boundaries', () => {
       expect(response.status).toBe(status);
     }
   });
-  it('validates inputs and enforces research permissions on the server', async () => {
-    const { app, store } = fixture();
+  it('validates task input on the server', async () => {
+    const { app } = fixture();
     expect(
       (await app.request('/api/tasks', json({ prompt: 'x' }))).status,
     ).toBe(400);
@@ -220,13 +218,8 @@ describe('API boundaries', () => {
         )
       ).status,
     ).toBe(400);
-    store.updateSettings({ researchAllowed: false });
-    expect(
-      (await app.request('/api/tasks', json({ prompt: 'Research' }))).status,
-    ).toBe(403);
-    expect(store.claim()).toBeNull();
   });
-  it('runs a sample job from the durable queue and retains its result', async () => {
+  it('runs a scheduled job from the durable queue and retains its result', async () => {
     const { app, store, runner } = fixture();
     const response = await app.request(
       '/api/tasks',
@@ -236,7 +229,7 @@ describe('API boundaries', () => {
     await runner.tick();
     const task = store.tasks()[0];
     expect(task.status).toBe('completed');
-    expect(store.detail(task.id)?.runs[0].result?.sample).toBe(true);
+    expect(store.detail(task.id)?.runs[0].result?.text).toBe('Done.');
   });
   it('persists memory edits and deletes', async () => {
     const { app, store } = fixture();

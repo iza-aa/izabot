@@ -9,17 +9,17 @@ importers:
   .:
     dependencies:
       '@ag-ui/client':
-        specifier: ^0.0.59
-        version: 0.0.59
+        specifier: ^1.0.2
+        version: 1.0.2
       '@ag-ui/core':
-        specifier: ^0.0.59
-        version: 0.0.59
+        specifier: ^1.0.2
+        version: 1.0.2(zod@4.6.6)
       '@copilotkit/channels':
         specifier: ^0.11.0
-        version: 0.11.0(@ag-ui/core@0.0.59)(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
+        version: 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
       '@copilotkit/core':
         specifier: ^1.75.0
-        version: 1.78.0(@ag-ui/core@0.0.59)(zod@4.6.6)
+        version: 1.78.0(@ag-ui/core@1.0.2(zod@4.6.6))(zod@4.6.6)
       '@copilotkit/react-core':
         specifier: ^1.75.0
         version: 1.78.0(@cfworker/json-schema@4.1.1)(@types/mdast@4.0.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(graphql@16.14.2)(micromark-util-types@2.0.3)(micromark@4.0.3(supports-color@10.2.2))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@10.2.2)(zod@4.6.6)
@@ -93,8 +93,8 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1(supports-color@10.2.2)
       rxjs:
-        specifier: ^7.8.1
-        version: 7.8.2
+        specifier: 7.8.1
+        version: 7.8.1
       ws:
         specifier: ^8.22.0
         version: 8.22.0
@@ -4919,11 +4919,11 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@ag-ui/langgraph@0.0.44(@ag-ui/client@1.0.2)(@ag-ui/core@1.0.2(zod@3.25.76))(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(ws@8.22.0)':
+  '@ag-ui/langgraph@0.0.44(@ag-ui/client@1.0.2)(@ag-ui/core@1.0.2(zod@4.6.6))(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(ws@8.22.0)':
     dependencies:
       '@ag-ui/a2ui-toolkit': 0.0.4
       '@ag-ui/client': 1.0.2
-      '@ag-ui/core': 1.0.2(zod@3.25.76)
+      '@ag-ui/core': 1.0.2(zod@4.6.6)
       '@langchain/core': 1.2.17(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(ws@8.22.0)
       '@langchain/langgraph-sdk': 1.12.3(@langchain/core@1.2.17(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(ws@8.22.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       langchain: 1.5.16(@langchain/core@1.2.17(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(ws@8.22.0))(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(ws@8.22.0)
@@ -5221,11 +5221,11 @@ snapshots:
       - encoding
       - zod
 
-  '@copilotkit/channels-discord@0.11.0(@ag-ui/core@0.0.59)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)':
+  '@copilotkit/channels-discord@0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)':
     dependencies:
       '@ag-ui/client': 0.0.59
       '@copilotkit/channels-core': 0.11.0(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
-      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@0.0.59)
+      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))
       discord.js: 14.27.0
     transitivePeerDependencies:
       - '@ag-ui/core'
@@ -5235,13 +5235,13 @@ snapshots:
       - vitest
       - zod
 
-  '@copilotkit/channels-intelligence@0.11.0(@ag-ui/core@1.0.2(zod@3.25.76))(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@3.25.76)':
+  '@copilotkit/channels-intelligence@0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@3.25.76)':
     dependencies:
       '@ag-ui/client': 0.0.59
       '@copilotkit/channels-core': 0.11.0(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@3.25.76)
       '@copilotkit/channels-slack': 0.11.0(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@3.25.76)
       '@copilotkit/channels-teams': 0.11.0(express@5.3.0(supports-color@10.2.2))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@3.25.76)
-      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@1.0.2(zod@3.25.76))
+      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))
       phoenix: 1.8.15
     transitivePeerDependencies:
       - '@ag-ui/core'
@@ -5333,11 +5333,11 @@ snapshots:
       - vitest
       - zod
 
-  '@copilotkit/channels-telegram@0.11.0(@ag-ui/core@0.0.59)(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)':
+  '@copilotkit/channels-telegram@0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)':
     dependencies:
       '@ag-ui/client': 0.0.59
       '@copilotkit/channels-core': 0.11.0(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
-      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@0.0.59)
+      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))
       grammy: 1.46.0(supports-color@10.2.2)
     transitivePeerDependencies:
       - '@ag-ui/core'
@@ -5353,33 +5353,33 @@ snapshots:
       - '@ag-ui/core'
       - encoding
 
-  '@copilotkit/channels-ui@0.11.0(@ag-ui/core@1.0.2(zod@3.25.76))':
+  '@copilotkit/channels-ui@0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))':
     dependencies:
-      '@copilotkit/shared': 1.78.0(@ag-ui/core@1.0.2(zod@3.25.76))
+      '@copilotkit/shared': 1.78.0(@ag-ui/core@1.0.2(zod@4.6.6))
     transitivePeerDependencies:
       - '@ag-ui/core'
       - encoding
 
-  '@copilotkit/channels-whatsapp@0.11.0(@ag-ui/core@0.0.59)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)':
+  '@copilotkit/channels-whatsapp@0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)':
     dependencies:
       '@ag-ui/client': 0.0.59
       '@copilotkit/channels-core': 0.11.0(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
-      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@0.0.59)
+      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))
     transitivePeerDependencies:
       - '@ag-ui/core'
       - encoding
       - vitest
       - zod
 
-  '@copilotkit/channels@0.11.0(@ag-ui/core@0.0.59)(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)':
+  '@copilotkit/channels@0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)':
     dependencies:
       '@copilotkit/channels-core': 0.11.0(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
-      '@copilotkit/channels-discord': 0.11.0(@ag-ui/core@0.0.59)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
+      '@copilotkit/channels-discord': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
       '@copilotkit/channels-slack': 0.11.0(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
       '@copilotkit/channels-teams': 0.11.0(express@5.3.0(supports-color@10.2.2))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
-      '@copilotkit/channels-telegram': 0.11.0(@ag-ui/core@0.0.59)(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
-      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@0.0.59)
-      '@copilotkit/channels-whatsapp': 0.11.0(@ag-ui/core@0.0.59)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
+      '@copilotkit/channels-telegram': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
+      '@copilotkit/channels-ui': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))
+      '@copilotkit/channels-whatsapp': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@4.6.6)
     optionalDependencies:
       express: 5.3.0(supports-color@10.2.2)
       vitest: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15))
@@ -5516,7 +5516,7 @@ snapshots:
       '@ag-ui/client': 1.0.2
       '@ag-ui/core': 1.0.2(zod@3.25.76)
       '@ag-ui/encoder': 1.0.2(zod@3.25.76)
-      '@ag-ui/langgraph': 0.0.44(@ag-ui/client@1.0.2)(@ag-ui/core@1.0.2(zod@3.25.76))(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(ws@8.22.0)
+      '@ag-ui/langgraph': 0.0.44(@ag-ui/client@1.0.2)(@ag-ui/core@1.0.2(zod@4.6.6))(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(ws@8.22.0)
       '@ag-ui/mcp-apps-middleware': 0.1.2(@ag-ui/client@1.0.2)(@cfworker/json-schema@4.1.1)(rxjs@7.8.1)(supports-color@10.2.2)(zod@3.25.76)
       '@ag-ui/mcp-middleware': 0.0.2(@ag-ui/client@1.0.2)(@cfworker/json-schema@4.1.1)(rxjs@7.8.1)(supports-color@10.2.2)(zod@3.25.76)
       '@ai-sdk/anthropic': 3.0.129(zod@3.25.76)
@@ -5526,9 +5526,9 @@ snapshots:
       '@ai-sdk/openai': 3.0.125(zod@3.25.76)
       '@cfworker/json-schema': 4.1.1
       '@copilotkit/channels-core': 0.11.0(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@3.25.76)
-      '@copilotkit/channels-intelligence': 0.11.0(@ag-ui/core@1.0.2(zod@3.25.76))(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@3.25.76)
+      '@copilotkit/channels-intelligence': 0.11.0(@ag-ui/core@1.0.2(zod@4.6.6))(@types/express@5.0.6)(debug@4.4.3(supports-color@10.2.2))(express@5.3.0(supports-color@10.2.2))(supports-color@10.2.2)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)))(zod@3.25.76)
       '@copilotkit/license-verifier': 0.5.0
-      '@copilotkit/shared': 1.78.0(@ag-ui/core@1.0.2(zod@3.25.76))
+      '@copilotkit/shared': 1.78.0(@ag-ui/core@1.0.2(zod@4.6.6))
       '@graphql-yoga/plugin-defer-stream': 3.24.4(graphql-yoga@5.24.4(graphql@16.14.2))(graphql@16.14.2)
       '@hono/node-server': 1.19.17(hono@4.13.13)
       '@langchain/core': 1.2.17(@opentelemetry/api@1.9.1)(openai@7.32.0(undici@6.29.0)(ws@8.22.0)(zod@4.6.6))(ws@8.22.0)
@@ -5582,25 +5582,6 @@ snapshots:
       '@ag-ui/a2ui-middleware': 0.0.10(@ag-ui/client@1.0.2)(rxjs@7.8.1)
       '@ag-ui/client': 1.0.2
       '@ag-ui/core': 0.0.59
-      '@copilotkit/license-verifier': 0.5.0
-      '@segment/analytics-node': 2.3.0
-      '@standard-schema/spec': 1.1.0
-      chalk: 4.1.2
-      clarinet: 0.12.6
-      graphql: 16.14.2
-      partial-json: 0.1.7
-      rxjs: 7.8.1
-      uuid: 11.1.1
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
-    transitivePeerDependencies:
-      - encoding
-
-  '@copilotkit/shared@1.78.0(@ag-ui/core@1.0.2(zod@3.25.76))':
-    dependencies:
-      '@ag-ui/a2ui-middleware': 0.0.10(@ag-ui/client@1.0.2)(rxjs@7.8.1)
-      '@ag-ui/client': 1.0.2
-      '@ag-ui/core': 1.0.2(zod@3.25.76)
       '@copilotkit/license-verifier': 0.5.0
       '@segment/analytics-node': 2.3.0
       '@standard-schema/spec': 1.1.0

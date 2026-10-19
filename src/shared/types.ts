@@ -9,7 +9,6 @@ export type Status =
 export interface Settings {
   name: string;
   paused: boolean;
-  researchAllowed: boolean;
   memoryAllowed: boolean;
 }
 export interface Task {
@@ -24,16 +23,8 @@ export interface Task {
   lease: string | null;
   leaseUntil: number | null;
 }
-export interface Source {
-  title: string;
-  url: string;
-  excerpt: string;
-}
 export interface Result {
   text: string;
-  sources: Source[];
-  sample: boolean;
-  screenshot?: string;
 }
 export interface Run {
   id: string;
@@ -65,8 +56,6 @@ export interface State {
   settings: Settings;
   tasks: Task[];
   memories: Memory[];
-  mode: 'sample' | 'live';
-  configured: boolean;
 }
 export type Action = 'run' | 'pause' | 'cancel';
 export interface Space {
@@ -82,7 +71,6 @@ export interface Dot {
   spaceIds: string[];
   name: string;
   instructions: string;
-  researchAllowed: boolean;
   memoryAllowed: boolean;
   createdAt: number;
   learningContainerId?: string | null;
@@ -110,9 +98,7 @@ export interface CallReceipt {
 export interface SetupStatus {
   intelligence: boolean;
   model: boolean;
-  browser: boolean;
   voice: boolean;
-  slack: string;
   missing: string[];
 }
 export interface WorkspaceState {
@@ -121,4 +107,5 @@ export interface WorkspaceState {
   conversations: Conversation[];
   setup: SetupStatus;
   calls: CallReceipt[];
+  taskThreads: { taskId: string; threadId: string }[];
 }

@@ -126,7 +126,7 @@ it('selects only owned web threads and binds the configured channel Dot before i
       input: input('web'),
     }),
   ).toThrow();
-  const other = ws.createDot(dot.spaceId, 'Other', 'Other role', true, true);
+  const other = ws.createDot(dot.spaceId, 'Other', 'Other role', true);
   expect(() =>
     select({
       surface: 'channel',

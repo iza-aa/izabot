@@ -23,7 +23,8 @@ import {
 import { getLatestMemoryFrame } from './window-stream-hub.js';
 export { perceptionObserveWorkspace, type UIElement, type PerceptionObserveResult };
 
-const CUA_MCP_URL = 'http://127.0.0.1:3211/mcp';
+const CUA_MCP_URL =
+  process.env.CUA_MCP_URL ?? 'http://127.0.0.1:3211/mcp';
 
 // ZERO INTRUSION INVARIANT: delivery_mode is strictly 'background'
 export type CuaDeliveryMode = 'background';

@@ -1,69 +1,41 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, FileText, Folder } from 'lucide-react';
-import type { Space } from '../shared/types';
-import type { Page } from '../server/pages';
-import { api } from './api';
+import { ChevronRight, Folder, MoreHorizontal, Plus } from 'lucide-react';
+import type { Dot, Space } from '../shared/types';
+import { Mascot } from './Mascot';
 
 export function SpaceNav({
   space,
+  dots,
   active,
-  pageId,
+  selectedDot,
   onOpen,
+  onDot,
+  onEditDot,
+  onNewDot,
 }: {
   space: Space;
+  dots: Dot[];
   active: boolean;
-  pageId?: string;
-  onOpen: (pageId?: string) => void;
+  selectedDot?: string;
+  onOpen: () => void;
+  onDot: (dot: Dot) => void;
+  onEditDot: (dot: Dot) => void;
+  onNewDot: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [pages, setPages] = useState<Page[]>([]);
-  const [error, setError] = useState('');
+  const containsSelected =
+    !!selectedDot && dots.some((dot) => dot.id === selectedDot);
+  const [expanded, setExpanded] = useState(active || containsSelected);
   useEffect(() => {
-    if (!expanded) return;
-    let current = true;
-    const load = async () => {
-      try {
-        const next = await api<Page[]>(`/spaces/${space.id}/pages`);
-        if (current) {
-          setPages(next);
-          setError('');
-        }
-      } catch {
-        if (current) setError('Could not load pages.');
-      }
-    };
-    void load();
-    const timer = setInterval(() => void load(), 3000);
-    return () => {
-      current = false;
-      clearInterval(timer);
-    };
-  }, [expanded, space.id]);
-  const branches = (parentId: string | null, depth = 0): React.ReactNode =>
-    pages
-      .filter((page) => page.parentId === parentId)
-      .map((page) => (
-        <div key={page.id}>
-          <button
-            className={`nav-item space-page-link ${active && pageId === page.id ? 'active' : ''}`}
-            style={{ paddingLeft: 28 + depth * 12 }}
-            aria-current={active && pageId === page.id ? 'page' : undefined}
-            onClick={() => onOpen(page.id)}
-          >
-            <FileText size={14} />
-            <span>{page.title}</span>
-          </button>
-          {branches(page.id, depth + 1)}
-        </div>
-      ));
+    if (active || containsSelected) setExpanded(true);
+  }, [active, containsSelected]);
   return (
-    <div className="space-nav-group">
+    <div className={`space-nav-group ${active ? 'space-nav-active' : ''}`}>
       <div className="space-nav-row">
         <button
           className="icon-button space-disclosure"
           aria-label={`${expanded ? 'Collapse' : 'Expand'} ${space.name}`}
           aria-expanded={expanded}
-          aria-controls={`space-pages-${space.id}`}
+          aria-controls={`space-dots-${space.id}`}
           onClick={() => setExpanded(!expanded)}
         >
           <ChevronRight
@@ -72,26 +44,40 @@ export function SpaceNav({
           />
         </button>
         <button
-          className={`nav-item ${active && !pageId ? 'active' : ''}`}
-          aria-current={active && !pageId ? 'page' : undefined}
-          onClick={() => onOpen()}
+          className={`nav-item ${active ? 'active' : ''}`}
+          aria-current={active ? 'page' : undefined}
+          onClick={onOpen}
         >
           <Folder size={16} />
           <span>{space.name}</span>
+          <small>{dots.length}</small>
         </button>
       </div>
       {expanded && (
-        <div id={`space-pages-${space.id}`}>
-          {error ? (
-            <p className="sidebar-error" role="status">
-              {error}
-            </p>
-          ) : (
-            branches(null)
-          )}
-          {!error && !pages.length && (
-            <p className="sidebar-empty">No pages yet</p>
-          )}
+        <div id={`space-dots-${space.id}`} className="space-dots">
+          {dots.map((item) => (
+            <div className="dot-nav-row" key={item.id}>
+              <button
+                className={`dot-nav ${selectedDot === item.id ? 'active' : ''}`}
+                aria-current={selectedDot === item.id ? 'page' : undefined}
+                onClick={() => onDot(item)}
+              >
+                <Mascot identity={item.id} name={item.name} small decorative />
+                <span>{item.name}</span>
+              </button>
+              <button
+                className="icon-button dot-settings"
+                aria-label={`Edit ${item.name}`}
+                onClick={() => onEditDot(item)}
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            </div>
+          ))}
+          <button className="nav-item space-new-dot" onClick={onNewDot}>
+            <Plus size={14} />
+            <span>New Dot</span>
+          </button>
         </div>
       )}
     </div>

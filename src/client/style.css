@@ -1925,7 +1925,7 @@ h3 {
   margin-bottom: 5px;
 }
 .spaces-nav {
-  max-height: 32vh;
+  max-height: 44vh;
   overflow: auto;
 }
 .space-group {
@@ -3081,57 +3081,21 @@ h3 {
 .template-app {
   background: #fff;
 }
-.icon-rail {
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 30;
-  width: 48px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 5px;
-  border-right: 1px solid var(--line);
-  background: #f5f5f5;
-}
-.icon-rail button {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #555;
-  border-radius: 8px;
-}
-.icon-rail .rail-brand {
-  color: #222;
-  font-size: 29px;
-  font-weight: 650;
-  letter-spacing: -7px;
-  padding-right: 6px;
-  margin-bottom: 12px;
-}
-.rail-brand span {
-  color: #438c81;
-}
-.icon-rail .rail-settings {
-  margin-top: auto;
-}
 .template-app.app .sidebar {
-  left: 48px;
-  width: 220px;
+  width: 242px;
   background: #f9f9f9;
   padding: 23px 12px 12px;
   border-right: 1px solid var(--line);
 }
 .template-app.app .workspace {
-  margin-left: 268px;
+  margin-left: 242px;
   background: #fff;
 }
+.template-app.app.nav-collapsed .sidebar {
+  display: none;
+}
 .template-app.app.nav-collapsed .workspace {
-  margin-left: 48px;
+  margin-left: 0;
 }
 .template-app .wordmark {
   font-size: 16px;
@@ -3165,7 +3129,6 @@ h3 {
 }
 .template-app .version,
 .template-app .mode-badge,
-.template-app .connection-note,
 .template-app .composer-bottom > span {
   display: none;
 }
@@ -3454,9 +3417,6 @@ h3 {
   }
 }
 @media (max-width: 700px) {
-  .icon-rail {
-    display: none;
-  }
   .template-app.app .workspace,
   .template-app.app.nav-collapsed .workspace {
     margin-left: 0;
@@ -3532,7 +3492,7 @@ h3 {
   }
 }
 
-/* Dots and document Spaces are peers; only pages belong inside Spaces. */
+/* Spaces contain Dots; pages live inside them. */
 .dots-nav {
   display: grid;
   gap: 3px;
@@ -3577,6 +3537,40 @@ h3 {
   display: flex;
   align-items: center;
   gap: 0;
+}
+.space-nav-group + .space-nav-group {
+  margin-top: 2px;
+}
+.space-dots {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 8px 14px;
+  padding-left: 8px;
+  border-left: 1px solid #e6e7e4;
+}
+.space-dots .dot-nav {
+  padding: 7px 8px;
+  min-height: 38px;
+}
+.space-dots .dot-nav > .mascot.small {
+  width: 24px;
+  height: 24px;
+}
+.space-new-dot {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  color: #8a8d88;
+  font-size: 12px;
+}
+.space-new-dot:hover {
+  color: #4b534d;
+  background: #f2f3f1;
+}
+.space-nav-row > .nav-item small {
+  margin-left: auto;
+  font-size: 10px;
+  color: #a3a6a1;
 }
 .space-nav-row > .space-disclosure {
   width: 20px;
@@ -4133,7 +4127,7 @@ h3 {
   background: #f1f1f1;
   color: var(--ink);
 }
-/* Dots and Spaces are sibling groups; give the second the same air. */
+/* Dots nest inside their Space; give each group breathing room. */
 .template-app .sidebar > .nav-label ~ .nav-label {
   margin-top: 18px;
 }

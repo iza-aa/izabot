@@ -23,7 +23,7 @@ export function TaskActions({
         </button>
       ) : (
         <button
-          disabled={busy || settings.paused || !settings.researchAllowed}
+          disabled={busy || settings.paused}
           onClick={() => onAction('run')}
         >
           <Play size={14} />

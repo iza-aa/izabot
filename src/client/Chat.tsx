@@ -21,7 +21,6 @@ import {
   AppWindow,
   ArrowUp,
   Clock3,
-  Link2,
   Phone,
   PhoneOff,
   Square,
@@ -35,7 +34,6 @@ import { ChatTranscript, isInternalVoiceReceipt } from './ChatTranscript';
 import type { CallReceipt, Conversation, Dot } from '../shared/types';
 import { Mascot } from './Mascot';
 import { useVoice } from './useVoice';
-import { CallView } from './CallView';
 import { shouldSubmitComposerOnKeyDown } from './chat-composer';
 
 export function Chat({
@@ -95,8 +93,8 @@ export function Chat({
     };
   }, [thread.id, contextAttempt]);
   const [draft, setDraft] = useState('');
-  const [source, setSource] = useState('');
-  const [sourceOpen, setSourceOpen] = useState(false);
+  const [pageTitle, setPageTitle] = useState('');
+  const [saveOpen, setSaveOpen] = useState(false);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(true);
   const [running, setRunning] = useState(false);
@@ -143,8 +141,6 @@ export function Chat({
       content: contextualMessage(text, pageContext),
     });
     setDraft('');
-    setSource('');
-    setSourceOpen(false);
     try {
       const allMsgs = agent.messages.map((m) => ({
         role: m.role,
@@ -281,24 +277,11 @@ export function Chat({
           <button
             className="icon-button"
             aria-label="Save conversation as page"
+            aria-expanded={saveOpen}
             disabled={running}
-            onClick={async () => {
-              const title = window.prompt('Page title', thread.title);
-              if (!title) return;
-              try {
-                const page = await api<Page>(
-                  `/conversations/${thread.id}/page`,
-                  'POST',
-                  { title },
-                );
-                location.hash = `/spaces/${page.spaceId}/pages/${page.id}`;
-              } catch (e) {
-                setError(
-                  e instanceof Error
-                    ? e.message
-                    : 'Could not save conversation.',
-                );
-              }
+            onClick={() => {
+              setPageTitle(thread.title);
+              setSaveOpen(!saveOpen);
             }}
           >
             <FilePlus size={18} />
@@ -408,48 +391,57 @@ export function Chat({
           )}
         </div>
       )}
-      {/* Voice call view disabled for now */ false && (
-        <CallView key={voice.status === 'idle' ? 'idle' : 'call'} dot={dot} voice={voice} />
-      )}
       <form
         className="chat-composer"
         onSubmit={(e) => {
           e.preventDefault();
-          void send(`${source ? `From ${source}:\n\n` : ''}${draft}`);
+          void send(draft);
         }}
       >
-        {sourceOpen && (
+        {saveOpen && (
           <div className="source-input">
-            <Link2 size={15} />
+            <FilePlus size={15} />
             <input
-              aria-label="Source page URL"
-              type="url"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              placeholder="https://example.com/page"
+              aria-label="Page title"
+              value={pageTitle}
+              onChange={(e) => setPageTitle(e.target.value)}
+              placeholder="Page title"
             />
             <button
               type="button"
-              className="icon-button"
-              aria-label="Remove source"
-              onClick={() => {
-                setSourceOpen(false);
-                setSource('');
+              className="primary"
+              disabled={!pageTitle.trim()}
+              onClick={async () => {
+                try {
+                  const page = await api<Page>(
+                    `/conversations/${thread.id}/page`,
+                    'POST',
+                    { title: pageTitle.trim() },
+                  );
+                  setSaveOpen(false);
+                  location.hash = `/spaces/${page.spaceId}/pages/${page.id}`;
+                } catch (e) {
+                  setError(
+                    e instanceof Error
+                      ? e.message
+                      : 'Could not save conversation.',
+                  );
+                }
               }}
+            >
+              Save page
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Cancel saving page"
+              onClick={() => setSaveOpen(false)}
             >
               <X size={14} />
             </button>
           </div>
         )}
         <div className="chat-compose-row">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Add source page link"
-            onClick={() => setSourceOpen(!sourceOpen)}
-          >
-            <Link2 size={19} />
-          </button>
           <textarea
             aria-label="Message your Dot"
             placeholder={`Message ${dot.name}…`}

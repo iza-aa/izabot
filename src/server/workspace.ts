@@ -20,11 +20,10 @@ export class WorkspaceStore {
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS spaces(id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, createdAt INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS dots(id TEXT PRIMARY KEY, spaceId TEXT NOT NULL, name TEXT NOT NULL, instructions TEXT NOT NULL, researchAllowed INTEGER NOT NULL, memoryAllowed INTEGER NOT NULL, createdAt INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS dots(id TEXT PRIMARY KEY, spaceId TEXT NOT NULL, name TEXT NOT NULL, instructions TEXT NOT NULL, memoryAllowed INTEGER NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS thread_bindings(id TEXT PRIMARY KEY, dotId TEXT NOT NULL, ownerId TEXT NOT NULL, title TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS task_threads(taskId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY, threadId TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, status TEXT NOT NULL, transcript TEXT NOT NULL, error TEXT);
-      CREATE TABLE IF NOT EXISTS captures(threadId TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY, threadId TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, status TEXT NOT NULL, transcript TEXT NOT NULL, error TEXT);`);
     for (const [table, column, definition] of [
       ['dots', 'learningContainerId', 'TEXT'],
       ['dots', 'skillDeliveryEnabled', 'INTEGER NOT NULL DEFAULT 0'],
@@ -38,6 +37,15 @@ export class WorkspaceStore {
       )
         this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
     }
+    // Research was removed; drop its leftovers from databases created earlier.
+    if (
+      this.db
+        .prepare('PRAGMA table_info(dots)')
+        .all()
+        .some((field) => field.name === 'researchAllowed')
+    )
+      this.db.exec('ALTER TABLE dots DROP COLUMN researchAllowed');
+    this.db.exec('DROP TABLE IF EXISTS captures');
     // Migrate only once: restarting must never restore a revoked grant.
     if (
       !this.db
@@ -72,7 +80,6 @@ export class WorkspaceStore {
         space.id,
         'Dot',
         'Be thoughtful, practical, and concise. Help the user think clearly and follow through.',
-        true,
         true,
       );
     }
@@ -109,7 +116,6 @@ export class WorkspaceStore {
           )
           .all(String(row.id))
           .map((grant) => String(grant.spaceId)),
-        researchAllowed: !!row.researchAllowed,
         memoryAllowed: !!row.memoryAllowed,
         skillDeliveryEnabled: !!row.skillDeliveryEnabled,
       })) as unknown as Dot[];
@@ -121,7 +127,6 @@ export class WorkspaceStore {
     spaceId: string,
     name: string,
     instructions: string,
-    researchAllowed: boolean,
     memoryAllowed: boolean,
     spaceIds: string[] = [spaceId],
     learningContainerId: string | null = null,
@@ -135,7 +140,6 @@ export class WorkspaceStore {
       spaceIds: [...new Set(spaceIds)].sort(),
       name,
       instructions,
-      researchAllowed,
       memoryAllowed,
       learningContainerId,
       skillDeliveryEnabled,
@@ -145,14 +149,13 @@ export class WorkspaceStore {
     try {
       this.db
         .prepare(
-          'INSERT INTO dots (id, spaceId, name, instructions, researchAllowed, memoryAllowed, createdAt, learningContainerId, skillDeliveryEnabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO dots (id, spaceId, name, instructions, memoryAllowed, createdAt, learningContainerId, skillDeliveryEnabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           dot.id,
           spaceId,
           name,
           instructions,
-          +researchAllowed,
           +memoryAllowed,
           dot.createdAt,
           learningContainerId,
@@ -181,10 +184,7 @@ export class WorkspaceStore {
   }
   updateDot(
     id: string,
-    patch: Pick<
-      Dot,
-      'name' | 'instructions' | 'researchAllowed' | 'memoryAllowed'
-    > & {
+    patch: Pick<Dot, 'name' | 'instructions' | 'memoryAllowed'> & {
       spaceId?: string;
       spaceIds?: string[];
       learningContainerId?: string | null;
@@ -207,12 +207,11 @@ export class WorkspaceStore {
     try {
       this.db
         .prepare(
-          'UPDATE dots SET name=?, instructions=?, researchAllowed=?, memoryAllowed=?, learningContainerId=?, skillDeliveryEnabled=? WHERE id=?',
+          'UPDATE dots SET name=?, instructions=?, memoryAllowed=?, learningContainerId=?, skillDeliveryEnabled=? WHERE id=?',
         )
         .run(
           patch.name,
           patch.instructions,
-          +patch.researchAllowed,
           +patch.memoryAllowed,
           learningContainerId,
           +skillDeliveryEnabled,
@@ -280,6 +279,11 @@ export class WorkspaceStore {
       .prepare('SELECT threadId FROM task_threads WHERE taskId=?')
       .get(taskId);
     return typeof row?.threadId === 'string' ? row.threadId : undefined;
+  }
+  taskThreads(): { taskId: string; threadId: string }[] {
+    return this.db
+      .prepare('SELECT taskId, threadId FROM task_threads')
+      .all() as unknown as { taskId: string; threadId: string }[];
   }
   calls(threadId?: string): CallReceipt[] {
     if (threadId) this.requireThread(threadId);
@@ -353,20 +357,5 @@ export class WorkspaceStore {
   setCallError(id: string, error: string | null) {
     this.call(id);
     this.db.prepare('UPDATE calls SET error=? WHERE id=?').run(error, id);
-  }
-  saveCapture(threadId: string, value: unknown) {
-    this.requireThread(threadId);
-    this.db
-      .prepare(
-        'INSERT INTO captures VALUES (?, ?) ON CONFLICT(threadId) DO UPDATE SET value=excluded.value',
-      )
-      .run(threadId, JSON.stringify(value));
-  }
-  capture(threadId: string): unknown {
-    this.requireThread(threadId);
-    const row = this.db
-      .prepare('SELECT value FROM captures WHERE threadId=?')
-      .get(threadId);
-    return typeof row?.value === 'string' ? JSON.parse(row.value) : null;
   }
 }

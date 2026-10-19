@@ -1,7 +1,7 @@
 import { mergePageSnapshot } from './page-snapshots';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Page } from '../server/pages';
-import type { Space, WorkspaceState } from '../shared/types';
+import type { Dot, Space, Task, WorkspaceState } from '../shared/types';
 import { api } from './api';
 import { SpaceLibrary } from './SpaceLibrary';
 import { PageDocument } from './PageDocument';
@@ -10,6 +10,7 @@ export function SpaceWorkspace({
   space,
   pageId,
   workspace,
+  tasks,
   paused,
   onPage,
   onDirty,
@@ -18,10 +19,14 @@ export function SpaceWorkspace({
   onThread,
   onSettings,
   onCreateDot,
+  onChat,
+  onEditDot,
+  onActivity,
 }: {
   space: Space;
   pageId?: string;
   workspace: WorkspaceState;
+  tasks: Task[];
   paused: boolean;
   onPage: (id?: string) => void;
   onDirty: (value: boolean) => void;
@@ -30,6 +35,9 @@ export function SpaceWorkspace({
   onThread: (threadId: string) => void;
   onSettings: () => void;
   onCreateDot: () => void;
+  onChat: (dotId: string) => void;
+  onEditDot: (dot: Dot) => void;
+  onActivity: () => void;
 }) {
   const [pages, setPages] = useState<Page[]>([]);
   const removed = useRef(new Set<string>());
@@ -107,8 +115,16 @@ export function SpaceWorkspace({
         <SpaceLibrary
           space={space}
           pages={pages}
+          dots={workspace.dots.filter((dot) => dot.spaceIds.includes(space.id))}
+          tasks={tasks}
+          taskThreads={workspace.taskThreads}
+          conversations={workspace.conversations}
           onPage={onPage}
           onNew={() => void create(null)}
+          onChat={onChat}
+          onEditDot={onEditDot}
+          onNewDot={onCreateDot}
+          onActivity={onActivity}
         />
       ) : page ? (
         <div className="space-writing-layout">

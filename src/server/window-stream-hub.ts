@@ -24,10 +24,10 @@ interface StreamSession {
 const activeSessions = new Map<number, StreamSession>();
 
 function resolveStreamerBinary(): string {
+  const override = process.env.PERCEPTION_BIN_PATH;
+  if (override && existsSync(override)) return override;
   const localBin = path.resolve(process.cwd(), 'bin/perception-eye');
   if (existsSync(localBin)) return localBin;
-  const parentBin = path.resolve('/Users/heizaaa/Desktop/cdev/opendots/bin/perception-eye');
-  if (existsSync(parentBin)) return parentBin;
   return 'perception-eye';
 }
 

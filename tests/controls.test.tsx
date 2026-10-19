@@ -5,7 +5,6 @@ import type { Settings, Task } from '../src/shared/types';
 const settings: Settings = {
   name: 'Dot',
   paused: false,
-  researchAllowed: true,
   memoryAllowed: true,
 };
 const task: Task = {

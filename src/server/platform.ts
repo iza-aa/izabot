@@ -13,15 +13,13 @@ import { WorkspaceStore } from './workspace.js';
 import { DotAgent } from './dot-agent.js';
 import { runThreadTurn } from './headless.js';
 import {
-  INTELLIGENCE_KEY_MISSING_LABEL,
   setupStatus,
   type PlatformConfig,
 } from './platform-config.js';
 import { validateRuntimeScope } from './runtime-scope.js';
 import { learningSelector } from './learning.js';
 export class Platform {
-  private channelStartupFailed = false;
-    readonly pages: PageService;
+  readonly pages: PageService;
   readonly computers: ComputerService;
   readonly connections: ConnectionService;
   readonly intelligence?: CopilotKitIntelligence;
@@ -48,30 +46,9 @@ export class Platform {
       wsUrl: config.intelligenceWsUrl,
       getLearningContainerId: learningSelector(
         workspace,
-        config.slackDotId ?? workspace.dots()[0]?.id,
+        workspace.dots()[0]?.id,
       ),
     });
-    const channels = [];
-    if (config.slackChannel && config.slackTeam && config.slackUsers.length) {
-      const dotId = config.slackDotId ?? workspace.dots()[0].id;
-      if (!workspace.dot(dotId))
-        throw new Error('SLACK_DOT_ID does not identify an existing Dot.');
-      const slack = createSlackChannel({
-        name: config.slackChannel,
-        config,
-        ownerId: workspace.ownerId,
-        paused: () => store.settings().paused,
-        agent: () =>
-          new DotAgent(
-            store,
-            workspace,
-            config,
-            dotId,
-            true,
-                      ),
-      });
-      channels.push(slack);
-    }
     const runtime = new CopilotRuntime({
       intelligence: this.intelligence,
                   identifyUser: async () => ({
@@ -84,16 +61,9 @@ export class Platform {
             .dots()
             .map((dot) => [
               dot.id,
-              new DotAgent(
-                store,
-                workspace,
-                config,
-                dot.id,
-                false,
-                              ),
+              new DotAgent(store, workspace, config, dot.id),
             ]),
         ) as any),
-      channels,
       generateThreadNames: true,
     });
     this.handler = createCopilotHonoHandler({
@@ -103,12 +73,7 @@ export class Platform {
     });
   }
   setup() {
-    return setupStatus(
-      this.config,
-      this.handler?.channels?.status().overall ??
-        (this.config.slackChannel ? 'setup_required' : 'not_configured'),
-      this.channelStartupFailed,
-    );
+    return setupStatus(this.config);
   }
   requireReady() {
     if (!this.config.intelligenceKey && this.config.apiKey) return;
@@ -119,21 +84,10 @@ export class Platform {
       );
   }
   async start() {
-    // setupTelemetry disabled
-    if (this.handler?.channels) {
-      try {
-        await this.handler.channels.ready({ timeoutMs: 15000 });
-        this.channelStartupFailed = false;
-      } catch (error) {
-        this.channelStartupFailed = true;
-        // setupTelemetry capture skipped
-        throw error;
-      }
-    }
+    // No external channels are configured.
   }
   async stop() {
-    // setupTelemetry stopped
-    await this.handler?.channels?.stop();
+    // No external channels are configured.
   }
   async createConversation(dotId: string, title: string) {
     this.requireReady();

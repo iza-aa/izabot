@@ -17,7 +17,6 @@ export type Claim = Task & { lease: string };
 const defaults: Settings = {
   name: 'Dot',
   paused: false,
-  researchAllowed: true,
   memoryAllowed: true,
 };
 export class Store {
@@ -26,7 +25,6 @@ export class Store {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
-      CREATE TABLE IF NOT EXISTS setup_telemetry (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, prompt TEXT NOT NULL, status TEXT NOT NULL, intervalSeconds INTEGER, nextRunAt INTEGER, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, error TEXT, lease TEXT, leaseUntil INTEGER);
       CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, taskId TEXT NOT NULL, status TEXT NOT NULL, startedAt INTEGER NOT NULL, finishedAt INTEGER, result TEXT, error TEXT);
@@ -34,24 +32,11 @@ export class Store {
       CREATE TABLE IF NOT EXISTS memories (id TEXT PRIMARY KEY, text TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS tasks_due ON tasks(status, nextRunAt);
       CREATE INDEX IF NOT EXISTS runs_task ON runs(taskId, startedAt);
-      CREATE INDEX IF NOT EXISTS events_task ON events(taskId, id);`);
+      CREATE INDEX IF NOT EXISTS events_task ON events(taskId, id);
+      DROP TABLE IF EXISTS setup_telemetry;`);
     this.db
       .prepare('INSERT OR IGNORE INTO settings VALUES (1, ?)')
       .run(JSON.stringify(defaults));
-  }
-  setupTelemetryState(): string | undefined {
-    return (
-      this.db.prepare('SELECT value FROM setup_telemetry WHERE id=1').get() as
-        { value: string } | undefined
-    )?.value;
-  }
-  saveSetupTelemetryState(value: string) {
-    this.db
-      .prepare('INSERT OR REPLACE INTO setup_telemetry VALUES (1, ?)')
-      .run(value);
-  }
-  clearSetupTelemetry() {
-    this.db.prepare('DELETE FROM setup_telemetry').run();
   }
   close() {
     this.db.close();
@@ -71,7 +56,12 @@ export class Store {
     const row = this.db
       .prepare('SELECT value FROM settings WHERE id=1')
       .get() as { value: string };
-    return JSON.parse(row.value) as Settings;
+    const stored = JSON.parse(row.value) as Partial<Settings>;
+    return {
+      name: typeof stored.name === 'string' ? stored.name : defaults.name,
+      paused: stored.paused === true,
+      memoryAllowed: stored.memoryAllowed !== false,
+    };
   }
   updateSettings(patch: Partial<Settings>): Settings {
     return this.transaction(() => {
@@ -82,7 +72,6 @@ export class Store {
         .run(JSON.stringify(settings));
       if (
         (!previous.paused && settings.paused) ||
-        (previous.researchAllowed && !settings.researchAllowed) ||
         (previous.memoryAllowed && !settings.memoryAllowed)
       ) {
         const running = this.tasks().filter((t) => t.status === 'running');
@@ -207,7 +196,7 @@ export class Store {
   claim(now = Date.now()): Claim | null {
     return this.transaction(() => {
       const settings = this.settings();
-      if (settings.paused || !settings.researchAllowed) return null;
+      if (settings.paused) return null;
       const expired = this.db
         .prepare("SELECT * FROM tasks WHERE status='running' AND leaseUntil<=?")
         .all(now) as unknown as Task[];
@@ -260,11 +249,7 @@ export class Store {
           task.intervalSeconds ? now + task.intervalSeconds * 1000 : null,
           claim.id,
         );
-      this.event(
-        claim.id,
-        claim.lease,
-        result.sample ? 'Fictional sample brief ready.' : 'Run completed.',
-      );
+      this.event(claim.id, claim.lease, 'Run completed.');
       return true;
     });
   }

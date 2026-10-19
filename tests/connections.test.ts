@@ -341,7 +341,6 @@ it('refuses approvals from other conversations, other Dots, or after expiry', as
     'Other',
     'Another specialist.',
     true,
-    true,
   );
   workspace.bindThread('other-thread', other.id, 'Elsewhere');
   const approvalId = await requestApproval(

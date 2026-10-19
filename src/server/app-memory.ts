@@ -98,11 +98,7 @@ export interface AppMemoryDocument {
 }
 
 export function getMemoryDir(): string {
-  const localDir = path.resolve(process.cwd(), 'data/app-memory');
-  if (existsSync(localDir)) return localDir;
-  const opendotsDir = '/Users/heizaaa/Desktop/cdev/opendots/data/app-memory';
-  if (existsSync(opendotsDir)) return opendotsDir;
-  return localDir;
+  return path.resolve(process.env.APP_MEMORY_DIR ?? 'data/app-memory');
 }
 
 const APP_ALIAS_MAP: Record<string, string> = {

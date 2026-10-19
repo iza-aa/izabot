@@ -30,7 +30,6 @@ function fixture() {
       baseUrl: 'https://unused.invalid/v1',
       runtimeUrl: '',
       voiceName: 'marin',
-      slackUsers: [],
     },
     dot.id,
   );

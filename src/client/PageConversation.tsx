@@ -118,8 +118,8 @@ export function PageConversation({
   if (!dot)
     return (
       <div className="document-chat-setup">
-        <span>Add a specialist to work with this Space.</span>
-        <button onClick={onCreateDot}>Create specialist</button>
+        <span>Add a Dot to work with this Space.</span>
+        <button onClick={onCreateDot}>Create Dot</button>
       </div>
     );
   if (workspace.setup.missing.length)
@@ -151,7 +151,7 @@ export function PageConversation({
         <div className="document-chat-dock-bottom">
           <label>
             <select
-              aria-label="Page specialist"
+              aria-label="Page Dot"
               disabled={busy}
               value={dot.id}
               onChange={(e) => setDotId(e.target.value)}

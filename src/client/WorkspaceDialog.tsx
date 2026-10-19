@@ -36,11 +36,6 @@ export function WorkspaceDialog({
         ? (dialog.memory?.text ?? '')
         : '',
   );
-  const [research, setResearch] = useState(
-    dialog.type === 'dot'
-      ? (dialog.dot?.researchAllowed ?? true)
-      : state.settings.researchAllowed,
-  );
   const [memory, setMemory] = useState(
     dialog.type === 'dot'
       ? (dialog.dot?.memoryAllowed ?? true)
@@ -95,10 +90,14 @@ export function WorkspaceDialog({
             setHasAccessibility(true);
             window.clearInterval(pollTimer);
           }
-        } catch {}
+        } catch {
+          // Keep polling until the permission is granted or the window closes.
+        }
       }, 1500);
       window.setTimeout(() => window.clearInterval(pollTimer), 30000);
-    } catch {}
+    } catch {
+      // Settings could not be opened; the user can open them manually.
+    }
   };
   useEffect(() => {
     const previous =
@@ -137,7 +136,7 @@ export function WorkspaceDialog({
       : dialog.type === 'dot'
         ? dialog.dot
           ? 'Make this Dot yours.'
-          : 'Meet your next specialist.'
+          : 'Create a new Dot.'
         : dialog.type === 'settings'
           ? 'Your workspace, your rules.'
           : dialog.type === 'memory'
@@ -160,7 +159,7 @@ export function WorkspaceDialog({
         >
           <X size={18} />
         </button>
-        <span className="eyebrow">OPENDOTS TEMPLATE</span>
+        <span className="eyebrow">WORKSPACE</span>
         <h2 id="dialog-title">{title}</h2>
         <form
           onSubmit={async (e) => {
@@ -182,7 +181,6 @@ export function WorkspaceDialog({
                 spaceIds,
                 name,
                 instructions: text,
-                researchAllowed: research,
                 memoryAllowed: memory,
                 learningContainerId: learningContainer.trim() || null,
                 skillDeliveryEnabled: skillDelivery,
@@ -191,7 +189,7 @@ export function WorkspaceDialog({
             if (dialog.type === 'settings') {
               path = '/settings';
               method = 'PATCH';
-              body = { researchAllowed: research, memoryAllowed: memory };
+              body = { memoryAllowed: memory };
             }
             if (dialog.type === 'memory') {
               path = dialog.memory
@@ -248,7 +246,7 @@ export function WorkspaceDialog({
                 onChange={(e) => setText(e.target.value)}
                 placeholder={
                   dialog.type === 'dot'
-                    ? 'You are a thoughtful research partner. Compare evidence and be clear about uncertainty.'
+                    ? 'You are my desktop co-pilot. Open apps, organize files, and confirm risky steps before acting.'
                     : ''
                 }
               />
@@ -300,36 +298,20 @@ export function WorkspaceDialog({
             </fieldset>
           )}
           {(dialog.type === 'dot' || dialog.type === 'settings') && (
-            <>
-              <label className="permission-row">
-                <input
-                  type="checkbox"
-                  checked={research}
-                  onChange={(e) => setResearch(e.target.checked)}
-                />
-                <span>
-                  <strong>Public-page research</strong>
-                  <small>
-                    Allow the server-side read-only browser tool. Global
-                    settings always take precedence.
-                  </small>
-                </span>
-              </label>
-              <label className="permission-row">
-                <input
-                  type="checkbox"
-                  checked={memory}
-                  onChange={(e) => setMemory(e.target.checked)}
-                />
-                <span>
-                  <strong>Use saved memories</strong>
-                  <small>
-                    Include your preferences in new turns. Changing permission
-                    stops active work.
-                  </small>
-                </span>
-              </label>
-            </>
+            <label className="permission-row">
+              <input
+                type="checkbox"
+                checked={memory}
+                onChange={(e) => setMemory(e.target.checked)}
+              />
+              <span>
+                <strong>Use saved memories</strong>
+                <small>
+                  Include your preferences in new turns. Changing permission
+                  stops active work.
+                </small>
+              </span>
+            </label>
           )}
           {dialog.type === 'dot' && (
             <fieldset className="space-access-fields">
@@ -342,7 +324,7 @@ export function WorkspaceDialog({
                 value={learningContainer}
                 maxLength={64}
                 pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                placeholder="research-workflow"
+                placeholder="shared-skills"
                 aria-describedby="learning-help"
                 onChange={(event) => {
                   setLearningContainer(event.target.value);
@@ -438,7 +420,7 @@ export function WorkspaceDialog({
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <strong style={{ fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ink)' }}>
                   <Shield size={15} color="var(--blue)" />
-                  Izin Kontrol Desktop Mac (Accessibility)
+                  macOS desktop control (Accessibility)
                 </strong>
                 <span className={`status ${hasAccessibility ? 'completed' : 'failed'}`}>
                   <span />
@@ -446,7 +428,8 @@ export function WorkspaceDialog({
                 </span>
               </div>
               <p>
-                Di macOS, izin Aksesibilitas diperlukan agar Dot dapat mengirim klik dan ketikan ke jendela aplikasi di latar belakang (Background CUA).
+                macOS needs Accessibility permission so a Dot can send clicks and
+                keystrokes to app windows in the background (Background CUA).
               </p>
               <div className="permission-callout-actions" style={{ marginTop: '10px' }}>
                 <button
@@ -455,7 +438,7 @@ export function WorkspaceDialog({
                   onClick={() => void handleGrantPermissions()}
                 >
                   <ExternalLink size={12} />
-                  Buka Accessibility & File App
+                  Open Accessibility & app file
                 </button>
                 <button
                   type="button"
@@ -469,7 +452,7 @@ export function WorkspaceDialog({
                   }}
                 >
                   <CheckCircle2 size={12} />
-                  Saya Sudah Izinkan
+                  I have allowed it
                 </button>
                 <button
                   type="button"
@@ -480,7 +463,7 @@ export function WorkspaceDialog({
                         setHasAccessibility(Boolean(data.accessibility));
                       });
                   }}
-                  title="Cek ulang status izin"
+                  title="Recheck permission status"
                 >
                   <RefreshCw size={11} />
                 </button>
@@ -503,33 +486,16 @@ export function WorkspaceDialog({
                     to the server environment, then restart.
                   </>
                 ) : (
-                  'Text configuration is present. A successful conversation confirms connectivity.'
+                  'Model configuration is present. A successful conversation confirms connectivity.'
                 )}
               </p>
               <p>
-                Slack: {workspace.setup.slack.replaceAll('_', ' ')}. Voice:{' '}
+                Voice:{' '}
                 {workspace.setup.voice
                   ? 'configuration present'
                   : 'needs VOICE_API_KEY and VOICE_MODEL'}
                 .
               </p>
-              <p>
-                Setup and usage metadata is collected by default.{' '}
-                <a
-                  href="https://github.com/CopilotKit/OpenDots/blob/main/docs/SETUP-TELEMETRY.md"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Tracking and opt-out details
-                </a>
-              </p>
-              <a
-                href="https://github.com/CopilotKit/OpenDots/blob/main/docs/SETUP.md"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Template setup guide ↗
-              </a>
             </div>
           )}
           {dialog.type === 'memory' && (

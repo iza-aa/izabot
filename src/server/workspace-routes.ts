@@ -11,7 +11,6 @@ const dotSchema = z
   .object({
     name: z.string().trim().min(1).max(40),
     instructions: z.string().trim().min(3).max(2000),
-    researchAllowed: z.boolean(),
     memoryAllowed: z.boolean(),
     learningContainerId: learningContainerIdSchema.optional(),
     skillDeliveryEnabled: z.boolean().optional(),
@@ -22,7 +21,6 @@ const dotSchema = z
 export function workspaceRoutes(platform: Platform, voice: VoiceService) {
   const app = new Hono();
   app.route('/', pageRoutes(platform));
-  app.post('/setup-telemetry', (c) => c.json({ ok: true }));
   app.get('/workspace', (c) =>
     c.json({
       spaces: platform.workspace.spaces(),
@@ -30,6 +28,7 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
       conversations: platform.workspace.conversations(),
       setup: platform.setup(),
       calls: platform.workspace.calls(),
+      taskThreads: platform.workspace.taskThreads(),
     }),
   );
   app.post('/spaces', async (c) => {
@@ -83,7 +82,6 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         data.data.spaceId,
         data.data.name,
         data.data.instructions,
-        data.data.researchAllowed,
         data.data.memoryAllowed,
         data.data.spaceIds,
         data.data.learningContainerId,
@@ -138,9 +136,6 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
       201,
     );
   });
-  app.get('/conversations/:id/capture', (c) =>
-    c.json(platform.workspace.capture(c.req.param('id'))),
-  );
   app.post('/voice/calls', async (c) => {
     const data = z
       .object({ threadId: z.string(), sdp: z.string().max(100000) })

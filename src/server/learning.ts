@@ -18,14 +18,14 @@ export function learningSelector(
     if (surface === 'channel') {
       if (agentId !== channelDotId)
         throw new Error(
-          'Conversation learning requires the configured Slack Dot.',
+          'Conversation learning requires the configured channel Dot.',
         );
       if (
         !workspace
           .conversations()
           .some((thread) => thread.id === input.threadId)
       )
-        workspace.bindThread(input.threadId, agentId, 'Slack conversation');
+        workspace.bindThread(input.threadId, agentId, 'Channel conversation');
     }
     return (
       workspace.requireThread(input.threadId, agentId).learningContainerId ??

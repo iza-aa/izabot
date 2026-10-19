@@ -16,7 +16,6 @@ const configured: PlatformConfig = {
   baseUrl: 'https://example.com',
   runtimeUrl: '',
   voiceName: 'marin',
-  slackUsers: [],
 };
 
 it('accepts the CLI project key and still accepts the template name', () => {
@@ -41,7 +40,7 @@ it('accepts the CLI project key and still accepts the template name', () => {
   expect(intelligenceApiKeyFromEnv({})).toBeUndefined();
 });
 
-it('reports either accepted name from the same label used by setup status and the copilotkit error', async () => {
+it('reports either accepted name from the same label used by the copilotkit error', async () => {
   const key = intelligenceApiKeyFromEnv({
     CPK_INTELLIGENCE_API_KEY: 'cpk-from-cli',
   });
@@ -51,9 +50,7 @@ it('reports either accepted name from the same label used by setup status and th
   });
   expect(INTELLIGENCE_KEY_MISSING_LABEL).toContain('CPK_INTELLIGENCE_API_KEY');
   expect(INTELLIGENCE_KEY_MISSING_LABEL).toContain('INTELLIGENCE_API_KEY');
-  expect(setupStatus(configured).missing).toContain(
-    INTELLIGENCE_KEY_MISSING_LABEL,
-  );
+  expect(setupStatus(configured).missing).toEqual([]);
 
   const store = new Store(':memory:');
   const workspace = new WorkspaceStore(':memory:', 'owner');
@@ -62,11 +59,12 @@ it('reports either accepted name from the same label used by setup status and th
     const response = await platform.handle(
       new Request('http://127.0.0.1/api/copilotkit/info'),
     );
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({
-      error: `Setup required: ${INTELLIGENCE_KEY_MISSING_LABEL}.`,
-    });
-    expect(platform.setup().missing).toContain(INTELLIGENCE_KEY_MISSING_LABEL);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      agents: Record<string, { name: string }>;
+    };
+    expect(body.agents[workspace.dots()[0].id]).toBeDefined();
+    expect(platform.setup().missing).toEqual([]);
   } finally {
     store.close();
     workspace.close();

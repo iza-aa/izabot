@@ -44,9 +44,7 @@ describe('durable task lifecycle', () => {
     const task = store.createTask('Research one');
     const claim = store.claim(Date.now())!;
     store.action(task.id, 'cancel');
-    expect(
-      store.finish(claim, { text: 'Late result', sources: [], sample: true }),
-    ).toBe(false);
+    expect(store.finish(claim, { text: 'Late result' })).toBe(false);
     expect(store.task(task.id)?.status).toBe('cancelled');
   });
   it('keeps recurring history and schedules only after completion', () => {
@@ -54,11 +52,7 @@ describe('durable task lifecycle', () => {
     const task = store.createTask('Recurring research', 60);
     const now = Date.now();
     const claim = store.claim(now)!;
-    store.finish(
-      claim,
-      { text: 'First result', sources: [], sample: true },
-      now,
-    );
+    store.finish(claim, { text: 'First result' }, now);
     expect(store.claim(now + 59_000)).toBeNull();
     expect(store.claim(now + 60_001)?.id).toBe(task.id);
     expect(store.detail(task.id)?.runs).toHaveLength(2);
@@ -69,9 +63,7 @@ describe('durable task lifecycle', () => {
     const claim = store.claim(Date.now())!;
     store.updateSettings({ paused: true });
     expect(store.claim(Date.now())).toBeNull();
-    expect(
-      store.finish(claim, { text: 'Late result', sources: [], sample: true }),
-    ).toBe(false);
+    expect(store.finish(claim, { text: 'Late result' })).toBe(false);
     store.updateSettings({ paused: false });
     expect(store.claim(Date.now())).toBeNull();
     expect(store.task(task.id)?.status).toBe('interrupted');
@@ -92,16 +84,8 @@ describe('durable task lifecycle', () => {
       const recovered = restarted.claim(now + 180_001)!;
       expect(recovered.id).toBe(old.id);
       expect(recovered.lease).not.toBe(old.lease);
-      expect(
-        store.finish(old, { text: 'Old', sources: [], sample: true }),
-      ).toBe(false);
-      expect(
-        restarted.finish(recovered, {
-          text: 'New',
-          sources: [],
-          sample: true,
-        }),
-      ).toBe(true);
+      expect(store.finish(old, { text: 'Old' })).toBe(false);
+      expect(restarted.finish(recovered, { text: 'New' })).toBe(true);
     } finally {
       restarted.close();
     }
@@ -116,9 +100,7 @@ describe('durable task lifecycle', () => {
     expect(store.claim(now + 180_001)?.id).toBe(next.id);
     expect(store.task(interrupted.id)?.status).toBe('interrupted');
     expect(store.detail(interrupted.id)?.runs[0].status).toBe('interrupted');
-    expect(store.finish(old, { text: 'Late', sources: [], sample: true })).toBe(
-      false,
-    );
+    expect(store.finish(old, { text: 'Late' })).toBe(false);
   });
   it('holds an expired run for review after a local page effect', () => {
     const { store, path } = fixture();
@@ -141,9 +123,7 @@ describe('durable task lifecycle', () => {
       expect(store.task(task.id)?.status).toBe('interrupted');
       expect(store.detail(task.id)?.runs[0].status).toBe('interrupted');
       expect(workspace.pages.list(dot.spaceId)).toHaveLength(1);
-      expect(
-        store.finish(old, { text: 'Late', sources: [], sample: true }),
-      ).toBe(false);
+      expect(store.finish(old, { text: 'Late' })).toBe(false);
 
       store.action(task.id, 'run');
       expect(store.claim(now + 180_002)?.id).toBe(task.id);

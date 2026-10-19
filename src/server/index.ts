@@ -1,6 +1,5 @@
 import type { Server as HttpServer } from 'node:http';
 import { setupWebSocketStreaming } from './window-stream-hub.js';
-import { webSearchProvider } from './parallel.js';
 import { createShutdown } from './shutdown.js';
 import { reportChannelFailure, safeFailure } from './platform-config.js';
 import { serve } from '@hono/node-server';
@@ -39,10 +38,6 @@ const config: PlatformConfig = {
   apiKey: process.env.OPENAI_API_KEY,
   model: process.env.OPENAI_MODEL,
   baseUrl: process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
-  webSearchProvider: webSearchProvider(process.env.WEB_SEARCH_PROVIDER),
-  parallelApiKey: process.env.PARALLEL_API_KEY,
-  browserUrl: process.env.BROWSER_URL,
-  browserSecret: process.env.BROWSER_SECRET,
   computerSupervisorUrl: process.env.COMPUTER_SUPERVISOR_URL,
   computerSupervisorToken: process.env.COMPUTER_SUPERVISOR_TOKEN,
   computerToken: process.env.COMPUTER_TOKEN,
@@ -50,50 +45,28 @@ const config: PlatformConfig = {
   voiceKey: process.env.VOICE_API_KEY,
   voiceModel: process.env.VOICE_MODEL,
   voiceName: process.env.VOICE_NAME ?? 'marin',
-  slackChannel: process.env.SLACK_CHANNEL_NAME,
-  slackTeam: process.env.SLACK_TEAM_ID,
-  slackUsers: (process.env.SLACK_USER_IDS ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean),
-  slackDotId: process.env.SLACK_DOT_ID || undefined,
   runtimeUrl: `http://${host === '::1' ? '[::1]' : '127.0.0.1'}:${port}/api/copilotkit`,
   ownerToken,
 };
 const platform = new Platform(store, workspace, config);
-const researchConfig = {
-  mode: 'live' as const,
-  apiKey: config.apiKey,
-  model: config.model,
-  baseUrl: config.baseUrl,
-  webSearchProvider: config.webSearchProvider,
-  parallelApiKey: config.parallelApiKey,
-  browserUrl: config.browserUrl,
-  browserSecret: config.browserSecret,
-};
-const runner = new Runner(
-  store,
-  researchConfig,
-  async (claim, _memories, signal, progress) => {
-    const threadId = workspace.taskThread(claim.id);
-    if (!threadId)
-      throw new Error(
-        'This legacy task has no Intelligence conversation. Create a new scheduled task from a conversation.',
-      );
-    progress('Running this task in its Intelligence conversation.');
-    const text = await platform.turn(threadId, claim.prompt, signal, {
-      opendotsSource: 'scheduled_task',
-    });
-    return { text, sources: [], sample: false };
-  },
-);
+const runner = new Runner(store, async (claim, _memories, signal, progress) => {
+  const threadId = workspace.taskThread(claim.id);
+  if (!threadId)
+    throw new Error(
+      'This legacy task has no Intelligence conversation. Create a new scheduled task from a conversation.',
+    );
+  progress('Running this task in its Intelligence conversation.');
+  const text = await platform.turn(threadId, claim.prompt, signal, {
+    opendotsSource: 'scheduled_task',
+  });
+  return { text };
+});
 const wsOrigin = new URL(
   config.intelligenceWsUrl ?? 'wss://realtime.intelligence.copilotkit.ai',
 ).origin;
 const app = createApp({
   store,
   runner,
-  config: researchConfig,
   ownerToken,
   origin: resolveAppOrigins(process.env.APP_ORIGIN, process.env.NODE_ENV),
   platform,
@@ -111,16 +84,8 @@ app.get('/api/*', (c) => c.json({ error: 'Not found.' }, 404));
 app.use('/*', serveStatic({ root: './dist/client' }));
 app.get('*', serveStatic({ path: './dist/client/index.html' }));
 const server = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
-  console.log(`OpenDots template listening on http://${host}:${info.port}`);
+  console.log(`OpenDots listening on http://${host}:${info.port}`);
   runner.start();
-  void platform
-    .start()
-    .catch((error) =>
-      reportChannelFailure(
-        'Slack Channels activation failed; check setup status',
-        [safeFailure(error)],
-      ),
-    );
 });
 setupWebSocketStreaming(server as unknown as HttpServer);
 const shutdown = createShutdown({

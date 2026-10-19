@@ -82,7 +82,6 @@ it('TanStack AI streams with the verified skill catalog and authorized server to
         baseUrl: 'https://unused.invalid',
         runtimeUrl: '',
         voiceName: 'marin',
-        slackUsers: [],
       },
       dot.id,
     );
@@ -154,7 +153,6 @@ it('native skill delivery fails the invocation before contacting the model when 
         baseUrl: 'https://unused.invalid',
         runtimeUrl: '',
         voiceName: 'marin',
-        slackUsers: [],
       },
       dot.id,
     );

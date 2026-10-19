@@ -1,14 +1,12 @@
 import { Store } from './store.js';
 import type { Result, Memory } from '../shared/types.js';
 import type { Claim } from './store.js';
-import { research, type Config } from './research.js';
 export class Runner {
   private timer?: ReturnType<typeof setInterval>;
   private active = new Map<string, AbortController>();
   constructor(
     private store: Store,
-    private config: Config,
-    private execute?: (
+    private execute: (
       claim: Claim,
       memories: Memory[],
       signal: AbortSignal,
@@ -67,9 +65,7 @@ export class Runner {
     }, 100);
     const timeout = setTimeout(
       () =>
-        controller.abort(
-          new Error('Research exceeded the 90 second time limit.'),
-        ),
+        controller.abort(new Error('Run exceeded the 90 second time limit.')),
       90_000,
     );
     try {
@@ -81,21 +77,18 @@ export class Runner {
         controller.signal.throwIfAborted();
         this.store.event(claim.id, claim.lease, text);
       };
-      const result = this.execute
-        ? await this.execute(claim, memories, controller.signal, progress)
-        : await research(
-            claim.prompt,
-            memories,
-            this.config,
-            controller.signal,
-            progress,
-          );
+      const result = await this.execute(
+        claim,
+        memories,
+        controller.signal,
+        progress,
+      );
       controller.signal.throwIfAborted();
       this.store.finish(claim, result);
     } catch (error) {
       this.store.fail(
         claim,
-        error instanceof Error ? error.message : 'Unexpected research failure.',
+        error instanceof Error ? error.message : 'Unexpected run failure.',
       );
     } finally {
       clearInterval(ownershipCheck);

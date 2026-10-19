@@ -135,10 +135,10 @@ export function WorkspaceAgentCursor({
   };
 
   const renderPhaseText = () => {
-    if (phase === 'type' && telemetry?.label) return `Mengetik "${telemetry.label}"`;
+    if (phase === 'type' && telemetry?.label) return `Typing "${telemetry.label}"`;
     if (phase === 'hotkey' && telemetry?.label) return telemetry.label;
-    if (phase === 'observe') return 'Mengamati layar...';
-    if (phase === 'click') return telemetry?.label ? `Klik ${telemetry.label}` : 'Mengeklik';
+    if (phase === 'observe') return 'Observing the screen…';
+    if (phase === 'click') return telemetry?.label ? `Click ${telemetry.label}` : 'Clicking';
     return telemetry?.label || 'OpenDots Agent';
   };
 
@@ -399,8 +399,8 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
               void fetchWindows();
               refreshFrame();
             }}
-            title="Segarkan frame jendela"
-            aria-label="Segarkan frame jendela"
+            title="Refresh window frame"
+            aria-label="Refresh window frame"
           >
             <RefreshCw size={14} className={loading ? 'spin' : ''} />
           </button>
@@ -488,7 +488,7 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
               <div className="scope-bar-left">
                 <Lock size={12} />
                 <span>
-                  Terkunci ke <strong>{selectedWin.app_name}</strong> (Window #{selectedWin.window_id}) - Biarkan jendela terbuka di belakang OpenDots
+                  Locked to <strong>{selectedWin.app_name}</strong> (Window #{selectedWin.window_id}) — keep the window open behind OpenDots
                 </span>
               </div>
               <small>Background CUA</small>
@@ -497,12 +497,12 @@ export function ConnectedAppWorkspace({ onClose }: { onClose: () => void }) {
         ) : (
           <div className="pane-empty">
             <AppWindow size={28} />
-            <h3>Tidak ada jendela aplikasi aktif.</h3>
+            <h3>No active app windows.</h3>
             <p>
-              Buka aplikasi target (seperti WhatsApp atau Safari) di macOS dan pastikan jendelanya tidak di-minimize ke Dock.
+              Open a target app (such as WhatsApp or Safari) on macOS and keep its window out of the Dock.
             </p>
             <button type="button" onClick={() => void fetchWindows()}>
-              Pindai Ulang
+              Scan again
             </button>
           </div>
         )}

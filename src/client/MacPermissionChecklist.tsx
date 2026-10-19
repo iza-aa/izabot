@@ -81,29 +81,29 @@ export function MacPermissionChecklist() {
       <div className="permission-pill-bar">
         <div className="permission-pill-status">
           <span className="online-dot-inline" />
-          <span>Sistem Otomasi Mac Siap - Background CUA & Persepsi Aktif</span>
+          <span>Mac automation ready — Background CUA and perception active</span>
         </div>
         <button
           type="button"
           className="text-button"
           onClick={() => setCollapsed(false)}
         >
-          Detail <ChevronDown size={12} />
+          Details <ChevronDown size={12} />
         </button>
       </div>
     );
   }
 
   return (
-    <section className="permission-card" aria-label="Kesiapan izin macOS">
+    <section className="permission-card" aria-label="macOS permission readiness">
       <div className="permission-card-header">
         <div className="permission-card-title">
           <span className={`permission-badge-icon ${isAllReady ? 'ready' : 'warn'}`}>
             {isAllReady ? <ShieldCheck size={15} /> : <ShieldAlert size={15} />}
           </span>
           <div>
-            <strong>Kesiapan Izin Otomasi macOS</strong>
-            <p>Diperlukan agar Dot dapat membaca jendela dan mengirim input di belakang layar.</p>
+            <strong>macOS automation permissions</strong>
+            <p>Required so a Dot can read windows and send input in the background.</p>
           </div>
         </div>
 
@@ -114,14 +114,14 @@ export function MacPermissionChecklist() {
             onClick={() => void fetchPermissions()}
           >
             <RefreshCw size={11} className={loading ? 'spin' : ''} />
-            Cek ulang
+            Recheck
           </button>
           {isAllReady && (
             <button
               type="button"
               className="icon-button"
               onClick={() => setCollapsed(true)}
-              aria-label="Ringkas daftar izin"
+              aria-label="Collapse permission list"
             >
               <ChevronUp size={14} />
             </button>
@@ -132,8 +132,8 @@ export function MacPermissionChecklist() {
       <div className="permission-list">
         <div className="permission-row">
           <div>
-            <strong>1. Accessibility (Kontrol Input)</strong>
-            <span>Mengizinkan injeksi klik dan ketikan ke jendela aplikasi terikat.</span>
+            <strong>1. Accessibility (input control)</strong>
+            <span>Lets a Dot send clicks and keystrokes to bound app windows.</span>
           </div>
           <span className={`status ${perms.accessibility ? 'completed' : 'failed'}`}>
             <span />
@@ -144,7 +144,7 @@ export function MacPermissionChecklist() {
         {!perms.accessibility && (
           <div className="permission-callout">
             <p>
-              Tarik (drag) file aplikasi di bawah ini langsung ke daftar <strong>System Settings &gt; Accessibility</strong> untuk mengaktifkan izin:
+              Drag the app files below directly into <strong>System Settings &gt; Accessibility</strong> to grant permission:
             </p>
             <div className="permission-callout-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -154,14 +154,14 @@ export function MacPermissionChecklist() {
                   onClick={() => void openSettings('accessibility')}
                 >
                   <ExternalLink size={12} />
-                  Buka Settings Accessibility macOS
+                  Open macOS Accessibility settings
                 </button>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => void openSettings('reveal-binary', 'bcu')}
-                  title="Buka BackgroundComputerUse.app di Finder untuk di-drag ke Accessibility"
+                  title="Reveal BackgroundComputerUse.app in Finder to drag into Accessibility"
                 >
                   <FolderOpen size={12} />
                   Drag 1: BackgroundComputerUse.app
@@ -169,7 +169,7 @@ export function MacPermissionChecklist() {
                 <button
                   type="button"
                   onClick={() => void openSettings('reveal-binary', 'cua')}
-                  title="Buka cua-spacesd di Finder untuk di-drag ke Accessibility"
+                  title="Reveal cua-spacesd in Finder to drag into Accessibility"
                 >
                   <FolderOpen size={12} />
                   Drag 2: cua-spacesd
@@ -177,7 +177,7 @@ export function MacPermissionChecklist() {
                 <button
                   type="button"
                   onClick={() => void openSettings('reveal-binary', 'app')}
-                  title="Buka OpenDots app di Finder untuk di-drag ke Accessibility"
+                  title="Reveal OpenDots.app in Finder to drag into Accessibility"
                 >
                   <FolderOpen size={12} />
                   Drag 3: OpenDots.app
@@ -189,8 +189,8 @@ export function MacPermissionChecklist() {
 
         <div className="permission-row">
           <div>
-            <strong>2. Screen Recording (Tangkapan Jendela)</strong>
-            <span>Diperlukan oleh Apple Vision OCR dan pratinjau kanvas kanan.</span>
+            <strong>2. Screen Recording (window capture)</strong>
+            <span>Required by Apple Vision OCR and the right-hand canvas preview.</span>
           </div>
           {perms.screen_recording ? (
             <span className="status completed">
@@ -203,15 +203,15 @@ export function MacPermissionChecklist() {
               className="text-button"
               onClick={() => void openSettings('screen-recording')}
             >
-              Izinkan <ExternalLink size={11} />
+              Allow <ExternalLink size={11} />
             </button>
           )}
         </div>
 
         <div className="permission-row">
           <div>
-            <strong>3. CUA Driver Daemon</strong>
-            <span>Layanan lokal pengirim aksi background di 127.0.0.1:3211.</span>
+            <strong>3. Background CUA service</strong>
+            <span>Local service that sends background clicks and keystrokes.</span>
           </div>
           <span className={`status ${perms.cua_daemon ? 'completed' : 'paused'}`}>
             <span />
@@ -221,8 +221,8 @@ export function MacPermissionChecklist() {
 
         <div className="permission-row">
           <div>
-            <strong>4. Perception Eye Engine</strong>
-            <span>Binary OCR cepat & pemetaan koordinat Logical Points.</span>
+            <strong>4. Perception Eye engine</strong>
+            <span>Fast OCR binary and Logical Point coordinate mapping.</span>
           </div>
           <span className={`status ${perms.perception_engine ? 'completed' : 'failed'}`}>
             <span />

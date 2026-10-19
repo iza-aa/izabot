@@ -1223,3 +1223,130 @@
   color: #53624d;
   font-size: 11px;
 }
+
+/* Space workplace: workers, automations, then pages. */
+.library-section-label .text-button {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.workplace-workers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 38px;
+}
+.workplace-worker {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e4e8e1;
+  border-radius: 12px;
+  background: #fff;
+  min-width: 0;
+}
+.workplace-worker-body {
+  flex: 1;
+  min-width: 0;
+}
+.workplace-worker h3 {
+  margin: 2px 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.workplace-worker p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--document-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.workplace-worker-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.document-primary.quiet {
+  background: #f4f6f3;
+  border-color: #e0e4dd;
+  color: #38453a;
+  min-height: 34px;
+  padding: 6px 11px;
+  font-size: 12px;
+}
+.document-primary.quiet:hover:not(:disabled) {
+  background: #ebeee8;
+  color: #26332a;
+}
+.workplace-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 16px;
+  border: 1px dashed #dfe3db;
+  border-radius: 12px;
+  color: var(--document-muted);
+  font-size: 13px;
+}
+.workplace-automations {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 38px;
+}
+.workplace-automation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e7eae4;
+  border-radius: 10px;
+  background: #fff;
+  color: #37403a;
+  text-align: left;
+  font-size: 13px;
+}
+.workplace-automation span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workplace-automation small {
+  color: var(--document-muted);
+  font-size: 11px;
+  text-transform: capitalize;
+}
+.workplace-automation:hover {
+  background: #f8faf6;
+}
+.schedule-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e7eae4;
+  border-radius: 10px;
+  background: #fafbf9;
+  font-size: 12px;
+}
+.schedule-inline label {
+  color: var(--document-muted);
+}
+.schedule-inline input {
+  width: 70px;
+  padding: 6px 8px;
+  border: 1px solid #dfe3db;
+  border-radius: 7px;
+}

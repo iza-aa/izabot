@@ -1,26 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { Store } from '../src/server/store.js';
 import { Runner } from '../src/server/runner.js';
-import { research, type Config } from '../src/server/research.js';
-const config: Config = {
-  mode: 'live',
-  apiKey: 'test',
-  model: 'test',
-  browserUrl: 'http://browser:4311',
-  browserSecret: 'test',
-  baseUrl: 'https://model.example/v1',
-};
 afterEach(() => vi.unstubAllGlobals());
 it('records generic scheduled runs without research wording', async () => {
   const store = new Store(':memory:');
   const prompt = 'Draft a welcome email.';
-  const result = {
-    text: 'A concise welcome email.',
-    sources: [],
-    sample: false,
-  };
+  const result = { text: 'A concise welcome email.' };
   const execute = vi.fn(async () => result);
-  const runner = new Runner(store, config, execute);
+  const runner = new Runner(store, execute);
   const task = store.createTask(prompt);
 
   try {
@@ -40,93 +27,41 @@ it('records generic scheduled runs without research wording', async () => {
     store.close();
   }
 });
-it('aborts research when permissions are revoked outside the runner instance', async () => {
+it('aborts active work when permissions are revoked outside the runner instance', async () => {
   const store = new Store(':memory:');
-  const runner = new Runner(store, config);
-  let requestSignal: AbortSignal | undefined;
-  const request = vi.fn(
-    (_url: string, options: RequestInit) =>
-      new Promise((_resolve, reject) => {
-        requestSignal = options.signal ?? undefined;
-        requestSignal?.addEventListener(
-          'abort',
-          () => reject(new Error('Aborted')),
-          { once: true },
-        );
+  let runSignal: AbortSignal | undefined;
+  const runner = new Runner(store, (_claim, _memories, signal) => {
+    runSignal = signal;
+    return new Promise((_resolve, reject) =>
+      signal.addEventListener('abort', () => reject(signal.reason), {
+        once: true,
       }),
-  );
-  vi.stubGlobal('fetch', request);
-  store.createTask('Read https://example.com');
+    );
+  });
+  store.createTask('Review the open pull request');
   const tick = runner.tick();
-  await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(runSignal).toBeDefined());
   store.updateSettings({ memoryAllowed: false });
   await tick;
-  expect(requestSignal?.aborted).toBe(true);
-  expect(request).toHaveBeenCalledOnce();
+  expect(runSignal?.aborted).toBe(true);
   expect(store.tasks()[0].status).toBe('interrupted');
   runner.stop();
   store.close();
 });
-it('checks abort again before sending source evidence or memories to the model', async () => {
-  const fetch = vi.fn().mockResolvedValue(
-    Response.json({
-      title: 'Source',
-      text: 'Page text',
-      url: 'https://example.com',
-    }),
-  );
-  vi.stubGlobal('fetch', fetch);
-  const controller = new AbortController();
-  await expect(
-    research(
-      'Read https://example.com',
-      [],
-      config,
-      controller.signal,
-      (text) => {
-        if (text.startsWith('Source captured')) controller.abort();
-      },
-    ),
-  ).rejects.toThrow();
-  expect(fetch).toHaveBeenCalledOnce();
-});
-it('omits stored memories from research when memory permission is disabled', async () => {
-  const store = new Store(':memory:');
-  store.saveMemory('Sensitive preference');
-  store.updateSettings({ memoryAllowed: false });
-  const task = store.createTask('Read this sample');
-  const runner = new Runner(store, { mode: 'sample', baseUrl: '' });
-  try {
-    await runner.tick();
-    expect(store.detail(task.id)?.runs[0].result?.text).not.toContain(
-      'Sensitive preference',
-    );
-    expect(store.detail(task.id)?.runs[0].result?.sample).toBe(true);
-    expect(store.detail(task.id)?.events.at(-1)?.text).toBe(
-      'Fictional sample brief ready.',
-    );
-  } finally {
-    runner.stop();
-    store.close();
-  }
-});
 it('holds active work for review on graceful shutdown', async () => {
   const store = new Store(':memory:');
-  const runner = new Runner(store, config);
-  const fetch = vi.fn(
-    (_url: string, options: RequestInit) =>
-      new Promise((_resolve, reject) =>
-        options.signal?.addEventListener(
-          'abort',
-          () => reject(new Error('Aborted')),
-          { once: true },
-        ),
-      ),
-  );
-  vi.stubGlobal('fetch', fetch);
-  store.createTask('Read https://example.com');
+  let runSignal: AbortSignal | undefined;
+  const runner = new Runner(store, (_claim, _memories, signal) => {
+    runSignal = signal;
+    return new Promise((_resolve, reject) =>
+      signal.addEventListener('abort', () => reject(signal.reason), {
+        once: true,
+      }),
+    );
+  });
+  store.createTask('Review the open pull request');
   const pending = runner.tick();
-  await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(runSignal).toBeDefined());
   runner.stop();
   await pending;
   expect(store.tasks()[0].status).toBe('interrupted');
@@ -137,12 +72,12 @@ it('holds active work for review on graceful shutdown', async () => {
 });
 it('survives a claim failure and runs work on the next tick', async () => {
   const store = new Store(':memory:');
-  const runner = new Runner(store, { mode: 'sample', baseUrl: '' });
+  const runner = new Runner(store, async () => ({ text: 'Done.' }));
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   const claim = vi.spyOn(store, 'claim').mockImplementationOnce(() => {
     throw new Error('SQLITE_BUSY');
   });
-  const task = store.createTask('Read this sample');
+  const task = store.createTask('Review the open pull request');
   try {
     await expect(runner.tick()).resolves.toBeUndefined();
     expect(log).toHaveBeenCalledOnce();
@@ -159,8 +94,8 @@ it('survives failure persistence errors and clears active work', async () => {
   const execute = vi
     .fn()
     .mockRejectedValueOnce(new Error('Provider failure'))
-    .mockResolvedValueOnce({ text: 'Recovered', sources: [], memories: [] });
-  const runner = new Runner(store, config, execute);
+    .mockResolvedValueOnce({ text: 'Recovered' });
+  const runner = new Runner(store, execute);
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   const fail = vi.spyOn(store, 'fail').mockImplementationOnce(() => {
     throw new Error('SQLITE_BUSY');
@@ -183,7 +118,6 @@ it('aborts work instead of throwing from an ownership timer', async () => {
   store.createTask('First');
   const runner = new Runner(
     store,
-    config,
     (_claim, _memories, signal) =>
       new Promise((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(signal.reason), {

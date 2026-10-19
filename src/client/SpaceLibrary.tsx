@@ -1,14 +1,19 @@
 import { useMemo, useState } from 'react';
 import {
+  ArrowUpRight,
+  Clock3,
   FileText,
-  Plus,
-  Search,
   LayoutGrid,
   List,
-  ArrowUpRight,
+  MessageCircle,
+  MoreHorizontal,
+  Plus,
+  Search,
 } from 'lucide-react';
 import type { Page } from '../server/pages';
-import type { Space } from '../shared/types';
+import type { Conversation, Dot, Space, Task } from '../shared/types';
+import { Mascot } from './Mascot';
+
 export function pageExcerpt(content: string) {
   return content
     .replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '')
@@ -22,16 +27,41 @@ export function pageExcerpt(content: string) {
     .trim()
     .slice(0, 150);
 }
+
+function scheduleLabel(seconds: number | null) {
+  if (!seconds) return 'One-off';
+  if (seconds >= 604800) return 'Weekly';
+  if (seconds >= 86400) return `Every ${Math.round(seconds / 86400)}d`;
+  if (seconds >= 3600) return `Every ${Math.round(seconds / 3600)}h`;
+  return `Every ${Math.round(seconds / 60)}m`;
+}
+
 export function SpaceLibrary({
   space,
   pages,
+  dots,
+  tasks,
+  taskThreads,
+  conversations,
   onPage,
   onNew,
+  onChat,
+  onEditDot,
+  onNewDot,
+  onActivity,
 }: {
   space: Space;
   pages: Page[];
+  dots: Dot[];
+  tasks: Task[];
+  taskThreads: { taskId: string; threadId: string }[];
+  conversations: Conversation[];
   onPage: (id: string) => void;
   onNew: () => void;
+  onChat: (dotId: string) => void;
+  onEditDot: (dot: Dot) => void;
+  onNewDot: () => void;
+  onActivity: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
@@ -51,14 +81,25 @@ export function SpaceLibrary({
         ),
     [pages, query, sort],
   );
+  const spaceDotIds = new Set(dots.map((dot) => dot.id));
+  const threadIds = new Set(
+    conversations
+      .filter((conversation) => spaceDotIds.has(conversation.dotId))
+      .map((conversation) => conversation.id),
+  );
+  const automations = tasks.filter((task) =>
+    taskThreads.some(
+      (pair) => pair.taskId === task.id && threadIds.has(pair.threadId),
+    ),
+  );
   return (
     <section
       className="space-library"
-      aria-label={`${space.name} page library`}
+      aria-label={`${space.name} workplace`}
     >
       <header className="library-heading">
         <div>
-          <span className="library-eyebrow">SPACE</span>
+          <span className="library-eyebrow">SPACE WORKPLACE</span>
           <h1>{space.name}</h1>
           {space.description && <p>{space.description}</p>}
         </div>
@@ -66,6 +107,87 @@ export function SpaceLibrary({
           <Plus size={17} /> New page
         </button>
       </header>
+
+      <div className="library-section-label">
+        <h2>Workers</h2>
+        <button className="text-button" onClick={onNewDot}>
+          <Plus size={13} /> New Dot
+        </button>
+      </div>
+      <div className="workplace-workers">
+        {dots.map((dot) => (
+          <article className="workplace-worker" key={dot.id}>
+            <Mascot identity={dot.id} name={dot.name} small />
+            <div className="workplace-worker-body">
+              <h3>{dot.name}</h3>
+              <p>{dot.instructions}</p>
+            </div>
+            <div className="workplace-worker-actions">
+              <button
+                className="document-primary quiet"
+                onClick={() => onChat(dot.id)}
+              >
+                <MessageCircle size={14} /> Chat
+              </button>
+              <button
+                className="icon-button"
+                aria-label={`Edit ${dot.name}`}
+                onClick={() => onEditDot(dot)}
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            </div>
+          </article>
+        ))}
+        {!dots.length && (
+          <div className="workplace-empty">
+            No Dots work here yet.
+            <button className="text-button" onClick={onNewDot}>
+              Create the first one
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="library-section-label">
+        <h2>Automations</h2>
+        <span>
+          {automations.length}{' '}
+          {automations.length === 1 ? 'scheduled task' : 'scheduled tasks'}
+        </span>
+      </div>
+      <div className="workplace-automations">
+        {automations.slice(0, 4).map((task) => (
+          <button
+            className="workplace-automation"
+            key={task.id}
+            onClick={onActivity}
+          >
+            <Clock3 size={15} />
+            <span>{task.prompt}</span>
+            <small>
+              {scheduleLabel(task.intervalSeconds)} · {task.status}
+            </small>
+          </button>
+        ))}
+        {!automations.length && (
+          <div className="workplace-empty">
+            Scheduled tasks started from this Space&apos;s chats appear here.
+          </div>
+        )}
+        {automations.length > 0 && (
+          <button className="text-button" onClick={onActivity}>
+            View all activity <ArrowUpRight size={12} />
+          </button>
+        )}
+      </div>
+
+      <div className="library-section-label">
+        <h2>Pages</h2>
+        <span>
+          {filtered.length} {filtered.length === 1 ? 'page' : 'pages'}
+        </span>
+      </div>
       <div className="library-tools">
         <label className="library-search">
           <Search size={17} />
@@ -107,12 +229,6 @@ export function SpaceLibrary({
             <List size={18} />
           </button>
         </div>
-      </div>
-      <div className="library-section-label">
-        <h2>{query ? 'Search results' : 'All pages'}</h2>
-        <span>
-          {filtered.length} {filtered.length === 1 ? 'page' : 'pages'}
-        </span>
       </div>
       {filtered.length ? (
         <div className={`library-pages ${layout}`}>

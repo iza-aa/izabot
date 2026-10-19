@@ -139,7 +139,6 @@ it('status never provisions and actions use per-Dot derived credentials with aud
     'Other',
     '',
     true,
-    true,
   );
   f.workspace.computers.patch(other.id, { enabled: true, files: true });
   await f.service.action(other.id, 'files_read', { path: 'note.txt' });

@@ -7,12 +7,9 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import { CopilotKitProvider } from '@copilotkit/react-core/v2';
 import {
   ArrowUp,
-  AppWindow,
   ArrowUpRight,
   BookOpen,
   Clock3,
-  Code2,
-  Folder,
   Menu,
   MessageCircle,
   Monitor,
@@ -30,13 +27,11 @@ import type {
   Conversation,
   Detail,
   Dot,
-  Result,
   State,
   WorkspaceState,
 } from '../shared/types';
 import { api, ApiError, authHeaders, setToken } from './api';
 import {
-  applyCaptureResult,
   applyRefreshResult,
   dismissNotice,
   visibleNotice,
@@ -45,7 +40,6 @@ import {
 import { Mascot } from './Mascot';
 import { Chat } from './Chat';
 import { ThreadList } from './ThreadList';
-import { ResultPane } from './ResultPane';
 import { TaskRow } from './TaskPresentation';
 import { TaskActions } from './TaskActions';
 import { WorkspaceDialog, type Dialog } from './WorkspaceDialog';
@@ -113,7 +107,6 @@ export function App() {
 
   const [notices, setNotices] = useState<Notices>({
     refresh: '',
-    capture: '',
     action: '',
   });
   const error = visibleNotice(notices);
@@ -127,12 +120,12 @@ export function App() {
   const [mobile, setMobile] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [pane, setPane] = useState(true);
-  const [capture, setCapture] = useState<Result>();
   const [prompt, setPrompt] = useState('');
   const [pendingPrompt, setPendingPrompt] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
   const [taskDetail, setTaskDetail] = useState<Detail>();
+  const [scheduleDraft, setScheduleDraft] = useState<string>();
   const refresh = useCallback(async () => {
     try {
       const [s, w] = await Promise.all([
@@ -160,32 +153,9 @@ export function App() {
     return () => clearInterval(timer);
   }, [refresh]);
   useEffect(() => {
-    setCapture(undefined);
-    if (!selectedThread) return;
-    let active = true;
-    const load = () =>
-      void api<Result | null>(`/conversations/${selectedThread}/capture`)
-        .then((result) => {
-          if (!active) return;
-          setCapture(result ?? undefined);
-          setNotices((current) => applyCaptureResult(current, { ok: true }));
-        })
-        .catch((e) => {
-          if (!active) return;
-          setNotices((current) =>
-            applyCaptureResult(
-              current,
-              describeFailure(e, 'Could not connect to the server.'),
-            ),
-          );
-        });
-    load();
-    const timer = setInterval(load, 3000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [selectedThread]);
+    setTaskDetail(undefined);
+    setScheduleDraft(undefined);
+  }, [view]);
   const mutate = async (path: string, method: string, body?: unknown) => {
     setError('');
     try {
@@ -206,17 +176,6 @@ export function App() {
     (item) => item.id === selectedThread && item.dotId === dot?.id,
   );
   const configured = !!workspace && workspace.setup.missing.length === 0;
-  const setupStep = workspace
-    ? dialog?.type === 'settings'
-      ? 'settings'
-      : configured
-        ? 'ready'
-        : 'setup_required'
-    : undefined;
-  useEffect(() => {
-    if (!setupStep) return;
-    return;
-  }, [setupStep]);
   const chooseDot = (next: Dot) => {
     setSelectedDot(next.id);
     setSelectedThread(
@@ -254,9 +213,7 @@ export function App() {
       <main className="unlock">
         <Mascot />
         <h1>Your own little corner.</h1>
-        <p>
-          Enter the owner access token configured on this template’s server.
-        </p>
+        <p>Enter the owner access token for this server.</p>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -307,57 +264,6 @@ export function App() {
     );
   const content = (
     <div className={`app template-app ${navCollapsed ? 'nav-collapsed' : ''}`}>
-      <nav className="icon-rail" aria-label="Workspace navigation">
-        <button
-          className="rail-brand"
-          aria-label="OpenDots home"
-          onClick={() => {
-            setView('chat');
-            setSelectedThread(undefined);
-          }}
-        >
-          o<span>·</span>
-        </button>
-        <button
-          aria-label={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          onClick={() => setNavCollapsed(!navCollapsed)}
-        >
-          <PanelLeft size={18} />
-        </button>
-        <button
-          aria-label="New chat"
-          disabled={!configured}
-          onClick={() => void newConversation()}
-        >
-          <Plus size={19} />
-        </button>
-        <button
-          aria-label="Open Spaces"
-          onClick={() => {
-            if (workspace.spaces[0]) openPage(workspace.spaces[0].id);
-          }}
-        >
-          <Folder size={18} />
-        </button>
-        <button aria-label="Open activity" onClick={() => setView('tasks')}>
-          <Clock3 size={18} />
-        </button>
-        <button
-          aria-label="Connected Mac Workspace"
-          title="Toggle Connected Mac Workspace"
-          className={pane ? 'rail-active' : ''}
-          onClick={() => setPane(!pane)}
-        >
-          <AppWindow size={18} />
-        </button>
-        <button
-          className="rail-settings"
-          aria-label="Open settings"
-          onClick={() => setDialog({ type: 'settings' })}
-        >
-          <Settings2 size={18} />
-        </button>
-      </nav>
       <button
         className="mobile-menu icon-button"
         aria-label="Open navigation"
@@ -402,43 +308,6 @@ export function App() {
           <span>New chat</span>
         </button>
         <div className="spaces-heading nav-label">
-          DOTS
-          <button
-            className="icon-button"
-            aria-label="Create Dot"
-            onClick={() =>
-              setDialog({ type: 'dot', spaceId: workspace.spaces[0].id })
-            }
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-        <nav className="dots-nav" aria-label="Dots">
-          {workspace.dots.map((item) => (
-            <div className="dot-nav-row" key={item.id}>
-              <button
-                className={`dot-nav ${dot.id === item.id && view === 'chat' ? 'active' : ''}`}
-                aria-current={
-                  dot.id === item.id && view === 'chat' ? 'page' : undefined
-                }
-                onClick={() => chooseDot(item)}
-              >
-                <Mascot identity={item.id} name={item.name} small decorative />
-                <span>{item.name}</span>
-              </button>
-              <button
-                className="icon-button dot-settings"
-                aria-label={`Edit ${item.name} settings`}
-                onClick={() =>
-                  setDialog({ type: 'dot', dot: item, spaceId: item.spaceId })
-                }
-              >
-                <MoreHorizontal size={15} />
-              </button>
-            </div>
-          ))}
-        </nav>
-        <div className="spaces-heading nav-label">
           SPACES
           <button
             className="icon-button"
@@ -453,9 +322,19 @@ export function App() {
             <SpaceNav
               key={space.id}
               space={space}
+              dots={workspace.dots.filter((item) =>
+                item.spaceIds.includes(space.id),
+              )}
               active={view === 'space' && spaceId === space.id}
-              pageId={pageId}
-              onOpen={(id) => openPage(space.id, id)}
+              selectedDot={view === 'chat' ? dot.id : undefined}
+              onOpen={() => openPage(space.id)}
+              onDot={chooseDot}
+              onEditDot={(item) =>
+                setDialog({ type: 'dot', dot: item, spaceId: item.spaceId })
+              }
+              onNewDot={() =>
+                setDialog({ type: 'dot', spaceId: space.id })
+              }
             />
           ))}
         </nav>
@@ -511,21 +390,8 @@ export function App() {
             onClick={() => setDialog({ type: 'settings' })}
           >
             <Settings2 size={17} />
-            <span>Settings & setup</span>
+            <span>Settings</span>
           </button>
-          <a
-            className="nav-item"
-            href="https://github.com/CopilotKit/OpenDots"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Code2 size={17} />
-            <span>Make it your own</span>
-            <ArrowUpRight size={13} />
-          </a>
-          <div className="version">
-            OPEN SOURCE TEMPLATE <span>v0.1</span>
-          </div>
         </div>
       </aside>
       <div className="workspace">
@@ -540,8 +406,12 @@ export function App() {
           <div className="breadcrumbs">
             <span>
               {view === 'space'
-                ? workspace.spaces.find((space) => space.id === spaceId)?.name
-                : 'Dots'}
+                ? (workspace.spaces.find((space) => space.id === spaceId)
+                    ?.name ?? 'Spaces')
+                : view === 'chat'
+                  ? (workspace.spaces.find((space) => space.id === dot.spaceId)
+                      ?.name ?? 'Spaces')
+                  : 'Workspace'}
             </span>
             <span>/</span>
             <strong>
@@ -550,14 +420,11 @@ export function App() {
                 : view === 'tasks'
                   ? 'Activity'
                   : view === 'space'
-                    ? 'Pages'
+                    ? 'Workplace'
                     : 'Memories'}
             </strong>
           </div>
           <div className="top-actions">
-            <span className="mode-badge">
-              {configured ? 'SELF-HOSTED' : 'SETUP REQUIRED'}
-            </span>
             <button
               className="pause-button"
               aria-label={
@@ -572,14 +439,18 @@ export function App() {
               {state.settings.paused ? <Play size={14} /> : <Pause size={14} />}
               <span>{state.settings.paused ? 'Resume' : 'Pause'}</span>
             </button>
-            <button
-              className="icon-button"
-              aria-label={pane ? 'Hide computer' : 'Show computer'}
-              aria-expanded={pane}
-              onClick={() => setPane(!pane)}
-            >
-              <Monitor size={18} />
-            </button>
+            {view === 'chat' && (
+              <button
+                className="icon-button"
+                aria-label={
+                  pane ? 'Hide desktop workspace' : 'Show desktop workspace'
+                }
+                aria-expanded={pane}
+                onClick={() => setPane(!pane)}
+              >
+                <Monitor size={18} />
+              </button>
+            )}
           </div>
         </header>
         {error && (
@@ -608,10 +479,19 @@ export function App() {
             }
             pageId={pageId}
             workspace={workspace}
+            tasks={state.tasks}
             paused={state.settings.paused}
             onPage={(id) => openPage(spaceId, id)}
             onSettings={() => setDialog({ type: 'settings' })}
             onCreateDot={() => setDialog({ type: 'dot', spaceId })}
+            onChat={(dotId) => {
+              const target = workspace.dots.find((item) => item.id === dotId);
+              if (target) chooseDot(target);
+            }}
+            onEditDot={(item) =>
+              setDialog({ type: 'dot', dot: item, spaceId: item.spaceId })
+            }
+            onActivity={() => setView('tasks')}
             onDirty={setDirtyPage}
             onRefresh={refresh}
             onSchedule={(threadId) => setDialog({ type: 'schedule', threadId })}
@@ -661,7 +541,7 @@ export function App() {
                         setDialog({ type: 'dot', dot, spaceId: dot.spaceId })
                       }
                     >
-                      Edit specialist <MoreHorizontal size={14} />
+                      Edit Dot <MoreHorizontal size={14} />
                     </button>
                   </div>
                   <MacPermissionChecklist />
@@ -671,29 +551,18 @@ export function App() {
                         <Settings2 size={20} />
                       </span>
                       <div>
-                        <strong>Connect your Dot</strong>
+                        <strong>Connect your model</strong>
                         <p>
-                          Connect your model and conversation service in
-                          Settings to start chatting. Your Spaces and Dot
-                          preferences are ready to use.
+                          Add your model configuration in Settings to start
+                          chatting. Spaces, Dots, and desktop control are ready
+                          to use.
                         </p>
-                        <p>
-                          Setup and usage metadata is collected by default.{' '}
-                          <a
-                            href="https://github.com/CopilotKit/OpenDots/blob/main/docs/SETUP-TELEMETRY.md"
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Tracking and opt-out details
-                          </a>
-                        </p>
-                        <a
-                          href="https://github.com/CopilotKit/OpenDots/blob/main/docs/SETUP.md"
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          className="text-button"
+                          onClick={() => setDialog({ type: 'settings' })}
                         >
-                          Open the setup guide <ArrowUpRight size={12} />
-                        </a>
+                          Open settings <ArrowUpRight size={12} />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -738,9 +607,9 @@ export function App() {
                   </form>
                   <div className="starter-suggestions">
                     {[
-                      'Help me think this through',
-                      'Research a public page',
-                      'Make a plan I can follow',
+                      'Summarize what is on my screen',
+                      'Organize the files on my Desktop',
+                      'Draft a reply in Mail',
                     ].map((text) => (
                       <button
                         key={text}
@@ -751,18 +620,6 @@ export function App() {
                         <ArrowUpRight size={12} />
                       </button>
                     ))}
-                  </div>
-                  <div className="connection-note">
-                    <span
-                      className={`online-dot ${workspace.setup.slack === 'online' ? '' : 'off'}`}
-                    />
-                    Slack · {workspace.setup.slack.replaceAll('_', ' ')}
-                    <button
-                      className="text-button"
-                      onClick={() => setDialog({ type: 'settings' })}
-                    >
-                      Setup details
-                    </button>
                   </div>
                 </div>
               )}
@@ -835,8 +692,8 @@ export function App() {
                     <Mascot />
                     <h2>A little context goes a long way.</h2>
                     <p>
-                      Add a preference like “Keep my research briefs short.” You
-                      can change or remove it anytime.
+                      Add a preference like “Keep replies short and concrete.”
+                      You can change or remove it anytime.
                     </p>
                   </div>
                 )}
@@ -893,28 +750,53 @@ export function App() {
                           { action },
                         )
                       }
-                      onSchedule={async () => {
-                        const raw = window.prompt(
-                          'Repeat interval in minutes (0 removes the schedule)',
-                          String((taskDetail.task.intervalSeconds ?? 0) / 60),
-                        );
-                        if (raw === null) return;
-                        const value = Number(raw);
-                        if (!Number.isFinite(value) || value < 0) {
-                          setError('Enter a valid number of minutes.');
-                          return;
-                        }
-                        await mutate(
-                          `/tasks/${taskDetail.task.id}/schedule`,
-                          'PUT',
-                          {
-                            intervalSeconds: value
-                              ? Math.round(value * 60)
-                              : null,
-                          },
-                        );
-                      }}
+                      onSchedule={() =>
+                        setScheduleDraft(
+                          String(
+                            (taskDetail.task.intervalSeconds ?? 0) / 60,
+                          ),
+                        )
+                      }
                     />
+                    {scheduleDraft !== undefined && (
+                      <div className="schedule-inline">
+                        <label htmlFor="task-interval">
+                          Repeat interval (minutes, 0 removes the schedule)
+                        </label>
+                        <input
+                          id="task-interval"
+                          type="number"
+                          min={0}
+                          value={scheduleDraft}
+                          onChange={(e) => setScheduleDraft(e.target.value)}
+                        />
+                        <button
+                          className="primary"
+                          onClick={async () => {
+                            const value = Number(scheduleDraft);
+                            if (!Number.isFinite(value) || value < 0) {
+                              setError('Enter a valid number of minutes.');
+                              return;
+                            }
+                            const saved = await mutate(
+                              `/tasks/${taskDetail.task.id}/schedule`,
+                              'PUT',
+                              {
+                                intervalSeconds: value
+                                  ? Math.round(value * 60)
+                                  : null,
+                              },
+                            );
+                            if (saved) setScheduleDraft(undefined);
+                          }}
+                        >
+                          Save schedule
+                        </button>
+                        <button onClick={() => setScheduleDraft(undefined)}>
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                     {taskDetail.task.error && (
                       <p className="chat-error">{taskDetail.task.error}</p>
                     )}
@@ -929,23 +811,6 @@ export function App() {
               </>
             )}
           </main>
-        )}
-        {pane && view !== 'chat' && (
-          <div className="computer-overlay">
-            <ResultPane
-              key={view === 'space' ? spaceId : dot.id}
-              dots={workspace.dots}
-              defaultDotId={
-                view === 'space'
-                  ? (workspace.dots.find((candidate) =>
-                      candidate.spaceIds.includes(spaceId),
-                    )?.id ?? dot.id)
-                  : dot.id
-              }
-              dotState="idle"
-              onClose={() => setPane(false)}
-            />
-          </div>
         )}
       </div>
       {dialog && (

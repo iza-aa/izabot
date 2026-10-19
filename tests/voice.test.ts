@@ -22,7 +22,6 @@ function fixture() {
     voiceModel: 'voice-model',
     voiceName: 'marin',
     runtimeUrl: '',
-    slackUsers: [],
   };
   const turn = vi.fn(
     async (_thread: string, _prompt: string, _signal: AbortSignal) =>

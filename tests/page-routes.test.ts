@@ -13,11 +13,9 @@ function fixture(ownerToken?: string) {
     store.close();
     ws.close();
   });
-  const config = { mode: 'live' as const, baseUrl: 'https://example.com' };
   const platform = new Platform(store, ws, {
-    baseUrl: config.baseUrl,
+    baseUrl: 'https://example.com',
     voiceName: 'marin',
-    slackUsers: [],
     runtimeUrl: '',
   });
   return {
@@ -25,8 +23,7 @@ function fixture(ownerToken?: string) {
     platform,
     app: createApp({
       store,
-      runner: new Runner(store, config),
-      config,
+      runner: new Runner(store, async () => ({ text: 'Done.' })),
       platform,
       ownerToken,
     }),
@@ -44,7 +41,6 @@ it('saves Learning settings through the owner API and rejects malformed containe
   const body = {
     name: dot.name,
     instructions: dot.instructions,
-    researchAllowed: true,
     memoryAllowed: true,
     learningContainerId: 'research',
     skillDeliveryEnabled: true,
@@ -435,7 +431,7 @@ it('answers 404, not 503, for a conversation or call that does not exist', async
     const response = await app.request(path);
     expect(response.status).toBe(404);
     expect(((await response.json()) as { error: string }).error).toMatch(
-      /not found|does not belong/,
+      /not found|does not belong/i,
     );
   }
 });

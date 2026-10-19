@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Hierarchical Graph & Action Macro (H-GAM) Persistent App Memory Engine
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
+import type { AppMemorySummary } from '../shared/types.js';
 
 export type SafetyTier = 'SAFE_READONLY' | 'MUTATING_REVERSIBLE' | 'DESTRUCTIVE_OR_SENSITIVE';
 
@@ -145,6 +146,47 @@ export function saveAppMemory(memory: AppMemoryDocument): void {
   } catch (err: unknown) {
     console.error(`[AppMemory] Failed to save memory for ${memory.app_metadata.bundle_id}:`, err);
   }
+}
+
+/** Lists the learned playbooks so the Memories view can show and forget them. */
+export function listAppMemories(): AppMemorySummary[] {
+  const memoryDir = getMemoryDir();
+  if (!existsSync(memoryDir)) return [];
+  return readdirSync(memoryDir)
+    .filter((file) => file.endsWith('.json'))
+    .flatMap((file) => {
+      const filePath = path.join(memoryDir, file);
+      try {
+        const memory = JSON.parse(
+          readFileSync(filePath, 'utf-8'),
+        ) as AppMemoryDocument;
+        return [
+          {
+            key: file.replace(/\.json$/, ''),
+            appName:
+              memory.app_metadata?.app_name ?? file.replace(/\.json$/, ''),
+            bundleId: memory.app_metadata?.bundle_id ?? '',
+            playbooks: memory.playbooks?.length ?? 0,
+            lessons: memory.reflexion_lessons?.length ?? 0,
+            updatedAt: statSync(filePath).mtimeMs,
+          },
+        ];
+      } catch {
+        return [];
+      }
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Removes one learned playbook file. The key is a bundle id or file name. */
+export function deleteAppMemory(key: string): boolean {
+  const memoryDir = getMemoryDir();
+  const filePath = path.join(memoryDir, `${key}.json`);
+  if (path.dirname(filePath) !== memoryDir || path.basename(filePath) !== `${key}.json`)
+    return false;
+  if (!existsSync(filePath)) return false;
+  unlinkSync(filePath);
+  return true;
 }
 
 export function detectCurrentAppState(
@@ -469,7 +511,7 @@ export function checkSafetyGate(
     if (lower.includes(pattern.toLowerCase())) {
       return {
         requiresTakeover: true,
-        reason: `Tindakan terdeteksi berisiko tinggi (${pattern}). Mengharuskan konfirmasi manual dari pengguna.`,
+        reason: `High-risk action detected (${pattern}). Manual confirmation required.`,
       };
     }
   }

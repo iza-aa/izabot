@@ -13,6 +13,7 @@ import { Runner } from './runner.js';
 import type { Platform } from './platform.js';
 import { VoiceService } from './voice.js';
 import { workspaceRoutes } from './workspace-routes.js';
+import { deleteAppMemory, listAppMemories } from './app-memory.js';
 import { setActiveSurface, getActiveSurface, setCursorAction, getCursorAction, bumpFrameVersion } from './active-surface.js';
 import { handleOmpChatCompletion, getLatestExecutionLogs, getTakeoverState, setTakeoverState } from './omp-adapter.js';
 import {
@@ -585,6 +586,12 @@ export function createApp({
     store.deleteMemory(c.req.param('id'))
       ? c.json({ ok: true })
       : c.json({ error: 'Memory not found.' }, 404),
+  );
+  app.get('/api/app-memories', (c) => c.json(listAppMemories()));
+  app.delete('/api/app-memories/:key', (c) =>
+    deleteAppMemory(c.req.param('key'))
+      ? c.json({ ok: true })
+      : c.json({ error: 'App memory not found.' }, 404),
   );
   app.notFound((c) => c.json({ error: 'Not found.' }, 404));
   app.onError((error, c) => {

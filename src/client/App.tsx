@@ -29,6 +29,7 @@ import type {
   Dot,
   State,
   WorkspaceState,
+  AppMemorySummary,
 } from '../shared/types';
 import { api, ApiError, authHeaders, setToken } from './api';
 import {
@@ -118,6 +119,32 @@ export function App() {
   const [needsAuth, setNeedsAuth] = useState(false);
   const [dialog, setDialog] = useState<Dialog>();
   const [mobile, setMobile] = useState(false);
+  const [appMemories, setAppMemories] = useState<AppMemorySummary[]>([]);
+  const [appMemoryError, setAppMemoryError] = useState('');
+  const loadAppMemories = useCallback(async () => {
+    try {
+      setAppMemories(await api<AppMemorySummary[]>('/app-memories'));
+      setAppMemoryError('');
+    } catch (e) {
+      setAppMemoryError(
+        e instanceof Error ? e.message : 'Could not load app playbooks.',
+      );
+    }
+  }, []);
+  useEffect(() => {
+    if (view === 'memories') void loadAppMemories();
+  }, [view, loadAppMemories]);
+  const forgetAppMemory = async (key: string) => {
+    if (!window.confirm(`Forget the learned playbook for ${key}?`)) return;
+    try {
+      await api(`/app-memories/${encodeURIComponent(key)}`, 'DELETE');
+      await loadAppMemories();
+    } catch (e) {
+      setAppMemoryError(
+        e instanceof Error ? e.message : 'Could not forget this playbook.',
+      );
+    }
+  };
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [pane, setPane] = useState(true);
   const [prompt, setPrompt] = useState('');
@@ -644,7 +671,7 @@ export function App() {
                 </h1>
                 <p>
                   {view === 'memories'
-                    ? 'Preferences you choose to share with your Dots.'
+                    ? 'Preferences and learned app playbooks your Dots remember.'
                     : 'Scheduled turns run on the server in their original conversation.'}
                 </p>
               </div>
@@ -700,6 +727,53 @@ export function App() {
                       You can change or remove it anytime.
                     </p>
                   </div>
+                )}
+                <div className="library-section-label">
+                  <h2>App playbooks</h2>
+                  <span>
+                    {appMemories.length}{' '}
+                    {appMemories.length === 1 ? 'app' : 'apps'}
+                  </span>
+                </div>
+                <p className="section-hint">
+                  Learned while working inside your Mac apps. Forget one to
+                  start that app fresh.
+                </p>
+                <div className="memory-grid">
+                  {appMemories.map((item) => (
+                    <article className="memory-card" key={item.key}>
+                      <Monitor size={18} />
+                      <div className="app-memory-body">
+                        <strong>{item.appName}</strong>
+                        <small>
+                          {item.playbooks} playbooks · {item.lessons} lessons ·
+                          Updated{' '}
+                          {new Date(item.updatedAt).toLocaleDateString()}
+                        </small>
+                      </div>
+                      <div>
+                        <small>App memory</small>
+                        <button
+                          className="icon-button"
+                          aria-label={`Forget ${item.appName} playbook`}
+                          onClick={() => void forgetAppMemory(item.key)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                {!appMemories.length && (
+                  <div className="workplace-empty">
+                    No app playbooks yet. They appear after a Dot works inside a
+                    Mac app.
+                  </div>
+                )}
+                {appMemoryError && (
+                  <p className="chat-error" role="alert">
+                    {appMemoryError}
+                  </p>
                 )}
               </>
             ) : (

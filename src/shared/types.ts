@@ -57,6 +57,15 @@ export interface State {
   tasks: Task[];
   memories: Memory[];
 }
+/** Summary of a learned per-app playbook written while working in a Mac app. */
+export interface AppMemorySummary {
+  key: string;
+  appName: string;
+  bundleId: string;
+  playbooks: number;
+  lessons: number;
+  updatedAt: number;
+}
 export type Action = 'run' | 'pause' | 'cancel';
 export interface Space {
   id: string;

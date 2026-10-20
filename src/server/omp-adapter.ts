@@ -50,6 +50,14 @@ import type {
   HandoffResult,
   SwarmProgressEvent,
 } from './swarm-types.js';
+import {
+  approveJitApproval,
+  createJitApproval,
+  denyJitApproval,
+  listJitApprovals,
+  reviewJitApproval,
+  type JitApprovalContext,
+} from './jit-approvals.js';
 import type { WorkspaceStore } from './workspace.js';
 import type { Dot } from '../shared/types.js';
 
@@ -58,6 +66,7 @@ const MAX_DELEGATION_DEPTH = 1;
 const DELEGATE_TIMEOUT_MS = 35_000;
 const SUB_AGENT_MAX_STEPS = 4;
 const SUB_AGENT_STEP_TIMEOUT_MS = 20_000;
+const JIT_PREVIEW_CHARS = 600;
 
 interface ReActToolCall {
   thought?: string;
@@ -76,9 +85,16 @@ interface ReActToolCall {
     | 'navigate_browser'
     | 'act_pause'
     | 'delegate_to_dot'
+    | 'jit_synthesize_and_run'
     | 'final_answer';
   args?: Record<string, unknown>;
   answer?: string;
+}
+
+export interface JitApprovalSummary {
+  id: string;
+  goal: string;
+  codePreview: string;
 }
 
 export interface OmpRuntimeContext {
@@ -92,6 +108,8 @@ export interface OmpRuntimeContext {
   activeSurface: ActiveSurface | null;
   progressEvents: string[];
   onProgress?: (message: string) => void;
+  jitEnabled: boolean;
+  jitApprovals: JitApprovalSummary[];
 }
 
 interface OmpReActResult {
@@ -374,12 +392,27 @@ export function buildReActSystemPrompt(
     : runtime && runtime.delegationDepth >= runtime.maxDelegationDepth
       ? `DELEGASI DOT: Dinonaktifkan untuk sesi ini (delegationDepth=${runtime.delegationDepth}). Selesaikan tugas sendiri; jangan memanggil delegate_to_dot.`
       : '';
+  const canUseJit = Boolean(
+    runtime?.jitEnabled &&
+      runtime.delegationDepth === 0 &&
+      runtime.currentDot &&
+      runtime.spaceId,
+  );
+  const jitContext = canUseJit
+    ? [
+        `JIT SCRIPT: Anda dapat memakai "jit_synthesize_and_run" untuk tugas deterministik yang lebih aman diselesaikan dengan skrip (transformasi data, HTTP/JSON, parsing file).`,
+        `Tool ini TIDAK langsung menjalankan kode. Tool hanya membuat permintaan persetujuan; owner harus menjalankan "/jit-review <id>" lalu "/jit-approve <id>".`,
+        `Jangan pernah memasukkan secret, token, atau password ke dalam kode. Jika tool mengembalikan status approval_required, berhenti dan beritahu owner ID persetujuannya; jangan mengulang skrip yang sama.`,
+      ].join('\n')
+    : runtime && runtime.delegationDepth > 0
+      ? `JIT SCRIPT: Dinonaktifkan untuk sub-agen. Jangan memanggil jit_synthesize_and_run.`
+      : '';
 
   return [
     `OPEN_DOTS: TRUE AUTONOMOUS REACT TOOL-CALLING AGENT SPECIFICATION`,
     `INSTRUKSI MUTLAK UNTUK AI CODING AGENT:`,
     `Dokumen ini adalah panduan implementasi teknis untuk bertindak sebagai ReAct (Reasoning + Acting) Agent otonom sejati di dalam panel kanan OpenDots.`,
-    `Dilarang keras menggunakan kata kunci rekayasa regex. Model AI langsung diberikan instrumen tool resmi (observe_workspace, click_workspace, type_in_workspace, press_key_in_workspace, navigate_browser, final_answer${canDelegate ? ', dan delegate_to_dot' : ''}).`,
+    `Dilarang keras menggunakan kata kunci rekayasa regex. Model AI langsung diberikan instrumen tool resmi (observe_workspace, click_workspace, type_in_workspace, press_key_in_workspace, navigate_browser, final_answer${canDelegate ? ', delegate_to_dot' : ''}${canUseJit ? ', dan jit_synthesize_and_run' : ''}).`,
     `Dilarang menggunakan karakter emoji dalam pemikiran maupun jawaban akhir.`,
     ``,
     surfaceContext,
@@ -387,6 +420,8 @@ export function buildReActSystemPrompt(
     dotContext,
     '',
     delegationContext,
+    '',
+    jitContext,
     '',
     memoryContext,
     '',
@@ -419,6 +454,13 @@ export function buildReActSystemPrompt(
           `   Gunakan "dot_id" dari daftar Dot yang tersedia. Jangan mendelegasikan seluruh tugas utama; berikan objective yang jelas dan dapat diselesaikan sendiri oleh Dot tujuan.`,
         ]
       : []),
+    ...(canUseJit
+      ? [
+          `12. "jit_synthesize_and_run": Mengusulkan skrip JavaScript (.mjs) untuk tugas deterministik. Tool ini membuat approval request dan TIDAK menjalankan kode sampai owner menyetujui.`,
+          `   Args: { "goal": string, "code": string, "args"?: object }`,
+          `   Kode harus membaca argumen dari process.argv[2] sebagai JSON dan mencetak SATU baris JSON ke stdout. Jangan memakai secret. Jika hasilnya approval_required, laporkan approval_id dan berhenti.`,
+        ]
+      : []),
     ``,
     `ATURAN PENALARAN REACT (Autonomous Observe-Think-Act-Verify Loop):`,
     `- Anda adalah Autonomous Agent yang berpikir mandiri tanpa ada aturan regex hardcoded.`,
@@ -442,6 +484,12 @@ export function buildReActSystemPrompt(
       ? [
           `Jika mendelegasikan:`,
           `{"thought": "Subtask ini lebih cocok untuk Dot lain", "tool": "delegate_to_dot", "args": {"dot_id": "<id>", "objective": "Tugas spesifik yang harus diselesaikan", "context": "Konteks pendukung"}}`,
+        ]
+      : []),
+    ...(canUseJit
+      ? [
+          `Jika mengusulkan skrip JIT:`,
+          `{"thought": "Tugas ini deterministik dan lebih aman memakai skrip", "tool": "jit_synthesize_and_run", "args": {"goal": "Tujuan skrip", "code": "const args = JSON.parse(process.argv[2] || \\"{}\\"); console.log(JSON.stringify({ ok: true, args }));", "args": {}}}`,
         ]
       : []),
     `Jika selesai dan menjawab pengguna:`,
@@ -830,6 +878,85 @@ async function executeDelegatedTurn(
   };
 }
 
+function normalizeJitCode(value: string): string {
+  const trimmed = value.trim();
+  const fenced = /^```(?:js|javascript|mjs)?\s*\n?([\s\S]*?)\n?```$/i.exec(
+    trimmed,
+  );
+  return fenced?.[1]?.trim() ?? trimmed;
+}
+
+async function handleJitTool(
+  args: Record<string, unknown>,
+  runtime: OmpRuntimeContext,
+): Promise<string> {
+  if (!runtime.jitEnabled) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        'JIT execution is disabled by owner policy (IZABOT_ENABLE_JIT=0).',
+    });
+  }
+  if (runtime.delegationDepth > 0) {
+    return JSON.stringify({
+      ok: false,
+      error: 'JIT execution is not available to delegated sub-agents.',
+    });
+  }
+  if (!runtime.currentDot || !runtime.spaceId) {
+    return JSON.stringify({
+      ok: false,
+      error: 'JIT requires an active Dot and Space context.',
+    });
+  }
+
+  const goal = typeof args.goal === 'string' ? args.goal.trim() : '';
+  const code =
+    typeof args.code === 'string' ? normalizeJitCode(args.code) : '';
+  if (!goal || !code) {
+    return JSON.stringify({
+      ok: false,
+      error: 'Both goal and code are required for jit_synthesize_and_run.',
+    });
+  }
+  const rawArgs = args.args;
+  const argsJson =
+    rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
+      ? (rawArgs as Record<string, unknown>)
+      : {};
+
+  try {
+    const approval = createJitApproval({
+      threadId: runtime.threadId,
+      dotId: runtime.currentDot.id,
+      spaceId: runtime.spaceId,
+      goal,
+      code,
+      argsJson,
+    });
+    const summary: JitApprovalSummary = {
+      id: approval.id,
+      goal,
+      codePreview: code.slice(0, JIT_PREVIEW_CHARS),
+    };
+    if (runtime.jitApprovals.length < 10) runtime.jitApprovals.push(summary);
+    return JSON.stringify({
+      ok: false,
+      status: 'approval_required',
+      approval_id: approval.id,
+      goal,
+      code_preview: summary.codePreview,
+      next_step: `Owner must run "/jit-review ${approval.id}", then "/jit-approve ${approval.id}". The script has NOT run yet.`,
+      expires_at: new Date(approval.expiresAt).toISOString(),
+    });
+  } catch (error) {
+    return JSON.stringify({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function executeWorkspaceTool(
   call: ReActToolCall,
   surface: ActiveSurface | null,
@@ -838,6 +965,9 @@ async function executeWorkspaceTool(
 ): Promise<string> {
   if (call.tool === 'delegate_to_dot') {
     return handleDelegateToDot(call.args ?? {}, runtime);
+  }
+  if (call.tool === 'jit_synthesize_and_run') {
+    return handleJitTool(call.args ?? {}, runtime);
   }
 
   if (!surface) {
@@ -1419,7 +1549,12 @@ async function runOmpReAct(options: {
         ? `JEJAK EKSEKUSI REACT SEJAUH INI:\n${scratchpad.join('\n\n')}`
         : surface
           ? 'Belum ada tool yang dipanggil pada giliran ini. Mulai dengan memanggil bcu_observe untuk mendeteksi State layar saat ini.'
-          : 'Tidak ada aplikasi aktif yang terikat. Jangan memanggil tool desktop; selesaikan tugas dengan penalaran atau gunakan final_answer.',
+          : runtime.jitEnabled &&
+              runtime.delegationDepth === 0 &&
+              runtime.currentDot &&
+              runtime.spaceId
+            ? 'Tidak ada aplikasi aktif yang terikat. Jangan memanggil tool desktop. Untuk tugas deterministik, gunakan jit_synthesize_and_run; jika tidak, gunakan final_answer.'
+            : 'Tidak ada aplikasi aktif yang terikat. Jangan memanggil tool desktop; selesaikan tugas dengan penalaran atau gunakan final_answer.',
       '',
       `INSTRUKSI GILIRAN INI (Langkah ${step}/${maxSteps}):`,
       'Berikan 1 objek JSON keputusan Anda berikutnya (tool call atau final_answer):',
@@ -1477,6 +1612,14 @@ async function runOmpReAct(options: {
     scratchpad.push(
       `[STEP ${step} ACTION]: ${JSON.stringify({ thought: decision.thought, tool: decision.tool, args: decision.args })}\n[STEP ${step} OBSERVATION]: ${observation}`,
     );
+    if (
+      decision.tool === 'jit_synthesize_and_run' &&
+      observation.includes('"status":"approval_required"')
+    ) {
+      finalReply =
+        'Saya sudah menyiapkan skrip JIT. Skrip belum dijalankan. Tinjau kode lalu setujui melalui perintah persetujuan di bawah.';
+      break;
+    }
     if (step === maxSteps) {
       finalReply =
         'Batas langkah penalaran tercapai. Tindakan telah dijalankan pada jendela workspace Anda.';
@@ -1491,6 +1634,88 @@ async function runOmpReAct(options: {
   }
 
   return { finalReply, logs, paused, timedOut };
+}
+
+export async function handleJitChatCommand(
+  prompt: string,
+  context: JitApprovalContext,
+): Promise<string | null> {
+  const trimmed = prompt.trim();
+  if (!trimmed.startsWith('/jit-')) return null;
+
+  if (/^\/jit-list\s*$/i.test(trimmed)) {
+    const pending = listJitApprovals(context);
+    if (pending.length === 0) {
+      return 'No pending JIT approvals in this conversation.';
+    }
+    return [
+      'Pending JIT approvals in this conversation:',
+      ...pending.map(
+        (approval) =>
+          `- \`${approval.id}\` — ${approval.goal} (${approval.reviewedAt ? 'reviewed' : 'not reviewed'}) · \`/jit-review ${approval.id}\``,
+      ),
+    ].join('\n');
+  }
+
+  const match = /^\/(jit-review|jit-approve|jit-deny)\s+([0-9a-f-]{36})$/i.exec(
+    trimmed,
+  );
+  if (!match) {
+    return 'Invalid JIT command. Use `/jit-list`, `/jit-review <id>`, `/jit-approve <id>`, or `/jit-deny <id>`.';
+  }
+
+  const action = match[1].toLowerCase();
+  const id = match[2].toLowerCase();
+  try {
+    if (action === 'jit-review') {
+      const approval = reviewJitApproval(id, context);
+      return [
+        `JIT approval \`${approval.id}\` is ready for review.`,
+        `Goal: ${approval.goal}`,
+        `Expires: ${new Date(approval.expiresAt).toISOString()}`,
+        '',
+        'Warning: after approval this script runs as your macOS user. It is not an OS sandbox. Review every line and every argument.',
+        '',
+        '````javascript',
+        approval.code,
+        '````',
+        '',
+        'Approved arguments:',
+        '```json',
+        JSON.stringify(approval.argsJson, null, 2).slice(0, 4000),
+        '```',
+        '',
+        `To approve, send \`/jit-approve ${approval.id}\`. To reject, send \`/jit-deny ${approval.id}\`.`,
+      ].join('\n');
+    }
+
+    if (action === 'jit-approve') {
+      const result = await approveJitApproval(id, context);
+      const lines = [
+        `JIT approval \`${id}\` executed: ${result.ok ? 'success' : 'failed'}.`,
+        `Exit code: ${result.exitCode ?? 'null'} · Duration: ${result.durationMs}ms${result.timedOut ? ' · timed out' : ''}`,
+      ];
+      if (result.parsedJson !== undefined) {
+        lines.push(
+          '',
+          '```json',
+          JSON.stringify(result.parsedJson, null, 2).slice(0, 6000),
+          '```',
+        );
+      } else if (result.stdout) {
+        lines.push('', '```', result.stdout.slice(0, 6000), '```');
+      }
+      if (result.stderr) {
+        lines.push('', '**stderr**', '```', result.stderr.slice(0, 6000), '```');
+      }
+      return lines.join('\n');
+    }
+
+    const approval = denyJitApproval(id, context);
+    return `JIT approval \`${approval.id}\` denied. The script was not executed.`;
+  } catch (error) {
+    return `JIT command failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
 }
 
 export async function handleOmpChatCompletion(
@@ -1523,9 +1748,85 @@ export async function handleOmpChatCompletion(
       })
       .join('\n');
 
-    // 2. Resolve active workspace surface strictly avoiding app drift
     const lastUserMsg = messages.findLast((m) => m.role === 'user')?.content ?? '';
     const promptStr = typeof lastUserMsg === 'string' ? lastUserMsg : '';
+
+    // 2. Resolve Dot/Space context before surface binding so owner approval
+    // commands can run without requiring a desktop window.
+    const workspace = platform?.workspace;
+    const requestedDotId =
+      typeof body.dotId === 'string' ? body.dotId : undefined;
+    const currentDot = workspace
+      ? requestedDotId
+        ? workspace.dot(requestedDotId)
+        : workspace.dots()[0]
+      : undefined;
+    const spaceId =
+      currentDot &&
+      typeof body.spaceId === 'string' &&
+      currentDot.spaceIds.includes(body.spaceId)
+        ? body.spaceId
+        : currentDot?.spaceId;
+    const threadId =
+      typeof body.threadId === 'string' && body.threadId
+        ? body.threadId
+        : 'omp-chat';
+    const collaborators =
+      workspace && currentDot && spaceId
+        ? workspace
+            .dots()
+            .filter(
+              (dot) =>
+                dot.id !== currentDot.id && dot.spaceIds.includes(spaceId),
+            )
+        : [];
+    const jitEnabled = process.env.IZABOT_ENABLE_JIT !== '0';
+
+    if (promptStr.trim().startsWith('/jit-')) {
+      if (!currentDot || !spaceId) {
+        return c.json({
+          id: `chatcmpl-${Date.now()}`,
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: body.model ?? 'omp-default',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: 'JIT commands require an active Dot and Space.',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        });
+      }
+      const jitReply = await handleJitChatCommand(promptStr, {
+        threadId,
+        dotId: currentDot.id,
+        spaceId,
+      });
+      if (jitReply) {
+        return c.json({
+          id: `chatcmpl-${Date.now()}`,
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: body.model ?? 'omp-default',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: jitReply,
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        });
+      }
+    }
+
+    // 3. Resolve active workspace surface strictly avoiding app drift
     const { surface: activeSurface, mismatchReason } = await resolveBoundSurface(promptStr);
 
     if (!activeSurface && mismatchReason) {
@@ -1546,44 +1847,21 @@ export async function handleOmpChatCompletion(
         ],
       });
     }
-    const workspace = platform?.workspace;
-    const requestedDotId =
-      typeof body.dotId === 'string' ? body.dotId : undefined;
-    const currentDot = workspace
-      ? requestedDotId
-        ? workspace.dot(requestedDotId)
-        : workspace.dots()[0]
-      : undefined;
-    const spaceId =
-      currentDot &&
-      typeof body.spaceId === 'string' &&
-      currentDot.spaceIds.includes(body.spaceId)
-        ? body.spaceId
-        : currentDot?.spaceId;
-    const collaborators =
-      workspace && currentDot && spaceId
-        ? workspace
-            .dots()
-            .filter(
-              (dot) =>
-                dot.id !== currentDot.id && dot.spaceIds.includes(spaceId),
-            )
-        : [];
+
     const progressEvents: string[] = [];
     const runtime: OmpRuntimeContext = {
       workspace,
       currentDot,
       spaceId,
-      threadId:
-        typeof body.threadId === 'string' && body.threadId
-          ? body.threadId
-          : 'omp-chat',
+      threadId,
       delegationDepth: 0,
       maxDelegationDepth: MAX_DELEGATION_DEPTH,
       collaborators,
       activeSurface,
       progressEvents,
       onProgress: (message) => console.log(`[SWARM] ${message}`),
+      jitEnabled,
+      jitApprovals: [],
     };
 
     latestHGamEvaluation = null;
@@ -1614,6 +1892,16 @@ export async function handleOmpChatCompletion(
         .map((line) => `- ${line}`)
         .join('\n');
       finalReply = `${finalReply}\n\n**Delegation Trace:**\n${trace}`;
+    }
+    if (runtime.jitApprovals.length > 0) {
+      const approvals = runtime.jitApprovals
+        .slice(-5)
+        .map(
+          (approval) =>
+            `- **${approval.goal}** — ID \`${approval.id}\`\n  Review: \`/jit-review ${approval.id}\` · Approve: \`/jit-approve ${approval.id}\` · Deny: \`/jit-deny ${approval.id}\``,
+        )
+        .join('\n');
+      finalReply = `${finalReply}\n\n**JIT Script Approval Required (not executed yet):**\n${approvals}\n\nReview the full code before approving. Approved scripts run as your macOS user; this is not an OS sandbox.`;
     }
     const isStreaming = Boolean(body.stream);
     const id = `chatcmpl-${Date.now()}`;

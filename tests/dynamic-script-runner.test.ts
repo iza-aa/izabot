@@ -35,10 +35,12 @@ describe('DynamicScriptRunner', () => {
     const dangerousCode = 'import fs from "fs"; fs.rmSync("/Users/foo", { recursive: true });';
     const dangerousSsh = 'const key = fs.readFileSync(process.env.HOME + "/.ssh/id_rsa");';
     const dangerousExec = 'import cp from "child_process"; cp.execSync("whoami");';
+    const dangerousSpawn = 'import { spawn } from "node:child_process"; spawn("whoami");';
 
     expect(validateScriptSafety(dangerousCode).safe).toBe(false);
     expect(validateScriptSafety(dangerousSsh).safe).toBe(false);
     expect(validateScriptSafety(dangerousExec).safe).toBe(false);
+    expect(validateScriptSafety(dangerousSpawn).safe).toBe(false);
 
     const safeCode = `
       const args = JSON.parse(process.argv[2] || "{}");

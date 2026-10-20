@@ -61,8 +61,8 @@ const FORBIDDEN_CODE_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
     reason: 'Unauthorized access to credentials or system directory.',
   },
   {
-    pattern: /\bchild_process\b.*\b(exec|execSync|spawnSync)\b/s,
-    reason: 'Usage of child_process.exec/execSync is disallowed in JIT scripts.',
+    pattern: /\bchild_process\b/,
+    reason: 'Usage of child_process is disallowed in JIT scripts.',
   },
   {
     pattern: /process\.kill\s*\(/,

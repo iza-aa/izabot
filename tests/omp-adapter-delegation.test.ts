@@ -32,6 +32,8 @@ function makeRuntime(
     collaborators: [],
     activeSurface: null,
     progressEvents: [],
+    jitEnabled: false,
+    jitApprovals: [],
     ...patch,
   };
 }
@@ -83,6 +85,38 @@ describe('delegate_to_dot prompt guard', () => {
       resolveDelegationTarget({ name: 'coder dot' }, runtime).target?.id,
     ).toBe('worker-dot');
     expect(resolveDelegationTarget({}, runtime).target?.id).toBe('worker-dot');
+  });
+
+  it('advertises JIT only to the top-level Dot when enabled', () => {
+    const topLevel = buildReActSystemPrompt(
+      null,
+      'Transform this JSON.',
+      null,
+      makeRuntime({ jitEnabled: true }),
+    );
+    expect(topLevel).toContain('12. "jit_synthesize_and_run"');
+    expect(topLevel).toContain('JIT SCRIPT: Anda dapat memakai');
+
+    const delegated = buildReActSystemPrompt(
+      null,
+      'Transform this JSON.',
+      null,
+      makeRuntime({
+        jitEnabled: true,
+        delegationDepth: 1,
+        maxDelegationDepth: 1,
+      }),
+    );
+    expect(delegated).not.toContain('12. "jit_synthesize_and_run"');
+    expect(delegated).toContain('JIT SCRIPT: Dinonaktifkan untuk sub-agen');
+
+    const disabled = buildReActSystemPrompt(
+      null,
+      'Transform this JSON.',
+      null,
+      makeRuntime({ jitEnabled: false }),
+    );
+    expect(disabled).not.toContain('jit_synthesize_and_run');
   });
 
   it('rejects unknown or absent targets', () => {

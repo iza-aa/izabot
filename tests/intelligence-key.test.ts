@@ -62,9 +62,23 @@ it('reports either accepted name from the same label used by the copilotkit erro
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       agents: Record<string, { name: string }>;
+      threadEndpoints: { list: boolean; inspect: boolean };
     };
     expect(body.agents[workspace.dots()[0].id]).toBeDefined();
     expect(platform.setup().missing).toEqual([]);
+    expect(body.threadEndpoints).toMatchObject({
+      list: false,
+      inspect: false,
+    });
+
+    const threads = await platform.handle(
+      new Request('http://127.0.0.1/api/copilotkit/threads'),
+    );
+    expect(await threads.json()).toMatchObject({
+      threads: [],
+      nextCursor: null,
+      hasMore: false,
+    });
   } finally {
     store.close();
     workspace.close();

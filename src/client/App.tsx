@@ -365,7 +365,6 @@ export function App() {
         </nav>
         {configured ? (
           <ThreadList
-            dotId={dot.id}
             dots={workspace.dots}
             local={workspace.conversations}
             selected={view === 'chat' ? selectedThread : undefined}
@@ -905,6 +904,7 @@ export function App() {
       runtimeUrl="/api/copilotkit"
       headers={authHeaders()}
       showDevConsole={false}
+      enableInspector={false}
     >
       {content}
     </CopilotKitProvider>

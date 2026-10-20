@@ -12,10 +12,7 @@ import { Store } from './store.js';
 import { WorkspaceStore } from './workspace.js';
 import { DotAgent } from './dot-agent.js';
 import { runThreadTurn } from './headless.js';
-import {
-  setupStatus,
-  type PlatformConfig,
-} from './platform-config.js';
+import { setupStatus, type PlatformConfig } from './platform-config.js';
 import { validateRuntimeScope } from './runtime-scope.js';
 import { learningSelector } from './learning.js';
 export class Platform {
@@ -29,7 +26,7 @@ export class Platform {
     readonly workspace: WorkspaceStore,
     readonly config: PlatformConfig,
   ) {
-        this.computers = new ComputerService(
+    this.computers = new ComputerService(
       workspace,
       config,
       () => store.settings().paused,
@@ -51,11 +48,11 @@ export class Platform {
     });
     const runtime = new CopilotRuntime({
       intelligence: this.intelligence,
-                  identifyUser: async () => ({
+      identifyUser: async () => ({
         id: workspace.ownerId,
         name: 'OpenDots owner',
       }),
-      agents: (async (_ctx: any) =>
+      agents: async (_ctx: any) =>
         Object.fromEntries(
           workspace
             .dots()
@@ -63,7 +60,7 @@ export class Platform {
               dot.id,
               new DotAgent(store, workspace, config, dot.id),
             ]),
-        ) as any),
+        ) as any,
       generateThreadNames: true,
     });
     this.handler = createCopilotHonoHandler({
@@ -146,8 +143,8 @@ export class Platform {
         audioFileTranscriptionEnabled: false,
         mode: 'live',
         threadEndpoints: {
-          list: true,
-          inspect: true,
+          list: Boolean(this.handler),
+          inspect: Boolean(this.handler),
           mutations: false,
           realtimeMetadata: false,
         },
@@ -157,7 +154,19 @@ export class Platform {
         telemetryDisabled: true,
       });
     }
-    if (!this.handler) return Response.json({ ok: true });
+    if (!this.handler) {
+      // The SDK still probes the thread list even when no remote runtime is
+      // configured. Return the empty shape so its reducer does not receive an
+      // object where it expects an array.
+      if (url.pathname.endsWith('/threads')) {
+        return Response.json({
+          threads: [],
+          nextCursor: null,
+          hasMore: false,
+        });
+      }
+      return Response.json({ ok: true });
+    }
     let body: unknown;
     if (request.method !== 'GET' && request.method !== 'HEAD')
       body = await request

@@ -9,6 +9,14 @@ import {
 } from '../src/server/agent-swarm-orchestrator.js';
 import type { AgentRoleDefinition, TaskTicket } from '../src/server/swarm-types.js';
 
+function visitedSignatureCount(orchestrator: AgentSwarmOrchestrator): number {
+  return (
+    orchestrator as unknown as {
+      visitedSignatures: Map<string, Set<string>>;
+    }
+  ).visitedSignatures.size;
+}
+
 describe('AgentSwarmOrchestrator', () => {
   const researcherRole: AgentRoleDefinition = {
     dotId: 'researcher-dot',
@@ -96,6 +104,71 @@ describe('AgentSwarmOrchestrator', () => {
     expect(progressEvents).toContain('COMPLETED:Researcher Dot');
     expect(progressEvents).toContain('REVIEW_REQUIRED:Critic Dot');
     expect(progressEvents).toContain('COMPLETED:Coder Dot');
+
+    const coderTicket = orchestrator
+      .listTickets()
+      .find((ticket) => ticket.assignedDotId === coderRole.dotId);
+    expect(coderTicket?.status).toBe('COMPLETED');
+    expect(coderTicket?.outputResult?.executiveSummary).toBe(
+      'Script generated and verified.',
+    );
+    expect(visitedSignatureCount(orchestrator)).toBe(0);
+  });
+
+  it('cleans up workflow signatures when the pipeline fails', async () => {
+    const executeAgent: AgentExecutorFn = vi.fn(async (role) => {
+      if (role.specialization === 'coder') throw new Error('Coder execution failed.');
+      return {
+        success: true,
+        executiveSummary: 'Research ready',
+        structuredPayload: {},
+        artifactPaths: [],
+        verificationNotes: [],
+        confidenceScore: 1.0,
+      };
+    });
+
+    const orchestrator = new AgentSwarmOrchestrator(executeAgent);
+    orchestrator.registerRole(researcherRole);
+    orchestrator.registerRole(coderRole);
+
+    await expect(
+      orchestrator.executeResearchToCodePipeline({
+        spaceId: 'space-1',
+        threadId: 'thread-1',
+        userGoal: 'Fail safely',
+        researcherDotId: researcherRole.dotId,
+        coderDotId: coderRole.dotId,
+      }),
+    ).rejects.toThrow('Coder execution failed.');
+
+    expect(visitedSignatureCount(orchestrator)).toBe(0);
+  });
+
+  it('cleans up workflow signatures after parallel fan-out', async () => {
+    const executeAgent: AgentExecutorFn = vi.fn(async (role) => ({
+      success: true,
+      executiveSummary: `${role.name} finished`,
+      structuredPayload: {},
+      artifactPaths: [],
+      verificationNotes: [],
+      confidenceScore: 0.9,
+    }));
+    const orchestrator = new AgentSwarmOrchestrator(executeAgent);
+    orchestrator.registerRole(researcherRole);
+    orchestrator.registerRole(coderRole);
+
+    const result = await orchestrator.executeParallelFanOut({
+      spaceId: 'space-1',
+      threadId: 'thread-1',
+      subtasks: [
+        { dotId: researcherRole.dotId, objective: 'Research' },
+        { dotId: coderRole.dotId, objective: 'Code' },
+      ],
+    });
+
+    expect(Object.keys(result)).toHaveLength(2);
+    expect(visitedSignatureCount(orchestrator)).toBe(0);
   });
 
   it('triggers critic revision feedback loop and retries when rejected', async () => {

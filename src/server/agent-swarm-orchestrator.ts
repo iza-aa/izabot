@@ -28,6 +28,21 @@ export type CriticEvaluatorFn = (
 
 const MAX_SUMMARY_CHARS = 1200; // Cap to prevent context window explosion
 
+type ResearchToCodePipelineParams = {
+  spaceId: string;
+  threadId: string;
+  userGoal: string;
+  researcherDotId: string;
+  coderDotId: string;
+  reviewerDotId?: string;
+};
+
+type ParallelFanOutParams = {
+  spaceId: string;
+  threadId: string;
+  subtasks: Array<{ dotId: string; objective: string }>;
+};
+
 export class AgentSwarmOrchestrator extends EventEmitter {
   private tickets = new Map<string, TaskTicket>();
   private roles = new Map<string, AgentRoleDefinition>();
@@ -240,6 +255,7 @@ export class AgentSwarmOrchestrator extends EventEmitter {
           }
         }
       }
+      ticket.outputResult = cleanResult;
       ticket.leaseOwner = null;
       ticket.leaseUntil = null;
       this.transitionStatus(
@@ -256,15 +272,19 @@ export class AgentSwarmOrchestrator extends EventEmitter {
   /**
    * SCENARIO 1 & 3: Linear Pipeline Hand-off (Researcher -> Coder -> Critic Review)
    */
-  async executeResearchToCodePipeline(params: {
-    spaceId: string;
-    threadId: string;
-    userGoal: string;
-    researcherDotId: string;
-    coderDotId: string;
-    reviewerDotId?: string;
-  }): Promise<{ researchResult: HandoffResult; codeResult: HandoffResult }> {
+  async executeResearchToCodePipeline(
+    params: ResearchToCodePipelineParams,
+  ): Promise<{ researchResult: HandoffResult; codeResult: HandoffResult }> {
     const workflowId = randomUUID();
+    return this.runResearchToCodePipeline(workflowId, params).finally(() => {
+      this.visitedSignatures.delete(workflowId);
+    });
+  }
+
+  private async runResearchToCodePipeline(
+    workflowId: string,
+    params: ResearchToCodePipelineParams,
+  ): Promise<{ researchResult: HandoffResult; codeResult: HandoffResult }> {
     const now = Date.now();
 
     // Stage 1: Researcher Ticket
@@ -361,12 +381,19 @@ export class AgentSwarmOrchestrator extends EventEmitter {
   /**
    * SCENARIO 2: Supervisor Fan-Out & Fan-In (Parallel multi-agent execution)
    */
-  async executeParallelFanOut(params: {
-    spaceId: string;
-    threadId: string;
-    subtasks: Array<{ dotId: string; objective: string }>;
-  }): Promise<Record<string, HandoffResult | { error: string }>> {
+  async executeParallelFanOut(
+    params: ParallelFanOutParams,
+  ): Promise<Record<string, HandoffResult | { error: string }>> {
     const workflowId = randomUUID();
+    return this.runParallelFanOut(workflowId, params).finally(() => {
+      this.visitedSignatures.delete(workflowId);
+    });
+  }
+
+  private async runParallelFanOut(
+    workflowId: string,
+    params: ParallelFanOutParams,
+  ): Promise<Record<string, HandoffResult | { error: string }>> {
     const ticketIds: Array<{ dotId: string; ticketId: string }> = [];
 
     for (const item of params.subtasks) {

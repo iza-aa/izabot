@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: MIT
+// Prompt and target-resolution tests for delegate_to_dot.
+
+import { describe, expect, it } from 'vitest';
+import {
+  buildReActSystemPrompt,
+  resolveDelegationTarget,
+  type OmpRuntimeContext,
+} from '../src/server/omp-adapter.js';
+import type { Dot } from '../src/shared/types.js';
+
+function makeDot(patch: Partial<Dot> & Pick<Dot, 'id' | 'name'>): Dot {
+  return {
+    spaceId: 'space-1',
+    spaceIds: ['space-1'],
+    instructions: 'General desktop work.',
+    memoryAllowed: true,
+    createdAt: 1,
+    ...patch,
+  };
+}
+
+function makeRuntime(
+  patch: Partial<OmpRuntimeContext> = {},
+): OmpRuntimeContext {
+  return {
+    currentDot: makeDot({ id: 'main-dot', name: 'Main Dot' }),
+    spaceId: 'space-1',
+    threadId: 'thread-1',
+    delegationDepth: 0,
+    maxDelegationDepth: 1,
+    collaborators: [],
+    activeSurface: null,
+    progressEvents: [],
+    ...patch,
+  };
+}
+
+describe('delegate_to_dot prompt guard', () => {
+  const worker = makeDot({
+    id: 'worker-dot',
+    name: 'Coder Dot',
+    instructions: 'Write and verify Node.js automation scripts.',
+  });
+
+  it('advertises the tool and collaborator list at depth zero', () => {
+    const prompt = buildReActSystemPrompt(
+      null,
+      'Build a small automation.',
+      null,
+      makeRuntime({ collaborators: [worker] }),
+    );
+
+    expect(prompt).toContain('DOT AKTIF: "Main Dot"');
+    expect(prompt).toContain('11. "delegate_to_dot"');
+    expect(prompt).toContain('worker-dot');
+    expect(prompt).toContain('Coder Dot');
+  });
+
+  it('removes the tool at the delegation depth limit', () => {
+    const prompt = buildReActSystemPrompt(
+      null,
+      'Build a small automation.',
+      null,
+      makeRuntime({
+        collaborators: [worker],
+        delegationDepth: 1,
+        maxDelegationDepth: 1,
+      }),
+    );
+
+    expect(prompt).not.toContain('11. "delegate_to_dot"');
+    expect(prompt).toContain('DELEGASI DOT: Dinonaktifkan');
+  });
+
+  it('resolves a target by id, name, or the only collaborator', () => {
+    const runtime = makeRuntime({ collaborators: [worker] });
+
+    expect(
+      resolveDelegationTarget({ dot_id: 'worker-dot' }, runtime).target?.id,
+    ).toBe('worker-dot');
+    expect(
+      resolveDelegationTarget({ name: 'coder dot' }, runtime).target?.id,
+    ).toBe('worker-dot');
+    expect(resolveDelegationTarget({}, runtime).target?.id).toBe('worker-dot');
+  });
+
+  it('rejects unknown or absent targets', () => {
+    const runtime = makeRuntime({ collaborators: [worker] });
+    expect(
+      resolveDelegationTarget({ dot_id: 'missing' }, runtime).error,
+    ).toContain('Dot tujuan tidak ditemukan');
+
+    const noCollaborators = makeRuntime();
+    expect(resolveDelegationTarget({}, noCollaborators).error).toContain(
+      'Tidak ada Dot lain',
+    );
+  });
+});

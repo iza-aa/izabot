@@ -135,26 +135,27 @@ export function Chat({
     if (!text.trim() || running || !loaded || !contextReady || paused) return;
     setError('');
     setRunning(true);
+    const userContent = contextualMessage(text, pageContext);
+    const priorMessages = agent.messages.map((m) => ({
+      role: m.role,
+      content:
+        typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+    }));
     agent.addMessage({
       id: crypto.randomUUID(),
       role: 'user',
-      content: contextualMessage(text, pageContext),
+      content: userContent,
     });
     setDraft('');
     try {
-      const allMsgs = agent.messages.map((m) => ({
-        role: m.role,
-        content:
-          typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-      }));
       const res = await fetch('/api/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [
-            ...allMsgs,
-            { role: 'user', content: contextualMessage(text, pageContext) },
-          ],
+          dotId: dot.id,
+          spaceId: dot.spaceId,
+          threadId: thread.id,
+          messages: [...priorMessages, { role: 'user', content: userContent }],
         }),
       });
       if (!res.ok) throw new Error('OMP HTTP error: ' + res.status);

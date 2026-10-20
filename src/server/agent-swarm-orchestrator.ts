@@ -465,6 +465,77 @@ export class AgentSwarmOrchestrator extends EventEmitter {
   }
 
   /**
+   * SCENARIO 5: Single delegated turn from a parent Dot to a worker Dot.
+   * Used by the chat ReAct loop for "delegate_to_dot".
+   */
+  async executeDelegation(params: {
+    spaceId: string;
+    threadId: string;
+    fromDotId: string;
+    targetDotId: string;
+    objective: string;
+    context?: HandoffResult;
+  }): Promise<HandoffResult> {
+    const role = this.roles.get(params.targetDotId);
+    if (!role) throw new Error(`Role for Dot ${params.targetDotId} is not registered.`);
+
+    const workflowId = randomUUID();
+    const ticketId = randomUUID();
+    const now = Date.now();
+    const fromRole = this.roles.get(params.fromDotId)?.specialization ?? 'orchestrator';
+
+    const envelope: AgentHandoffEnvelope = {
+      envelopeId: randomUUID(),
+      workflowId,
+      fromDotId: params.fromDotId,
+      fromRole,
+      toDotId: params.targetDotId,
+      toRole: role.specialization,
+      hopCount: 1,
+      maxHops: 1,
+      taskObjective: params.objective,
+      distilledContext:
+        params.context ?? {
+          success: true,
+          executiveSummary: params.objective,
+          structuredPayload: {},
+          artifactPaths: [],
+          verificationNotes: [],
+          confidenceScore: 1.0,
+        },
+      createdAt: now,
+    };
+
+    this.tickets.set(ticketId, {
+      ticketId,
+      workflowId,
+      spaceId: params.spaceId,
+      threadId: params.threadId,
+      parentTicketId: null,
+      assignedDotId: params.targetDotId,
+      reviewerDotId: null,
+      status: 'PENDING',
+      priority: 'normal',
+      hopCount: 1,
+      maxHops: 1,
+      rejectionCount: 0,
+      maxRejections: 0,
+      inputEnvelope: envelope,
+      outputResult: null,
+      error: null,
+      leaseOwner: null,
+      leaseUntil: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return this.runTicket(ticketId).finally(() => {
+      this.visitedSignatures.delete(workflowId);
+      this.tickets.delete(ticketId);
+    });
+  }
+
+  /**
    * SCENARIO 4: Asynchronous Emergency Escalation (CUA Operator -> Troubleshooter Dot)
    */
   async escalateToTroubleshooter(params: {

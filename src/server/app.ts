@@ -285,8 +285,12 @@ export function createApp({
     }
   });
 
-  app.post('/v1/chat/completions', handleOmpChatCompletion);
-  app.post('/api/v1/chat/completions', handleOmpChatCompletion);
+  app.post('/v1/chat/completions', (c) =>
+    handleOmpChatCompletion(c, platform),
+  );
+  app.post('/api/v1/chat/completions', (c) =>
+    handleOmpChatCompletion(c, platform),
+  );
 
   // Connected Apps & Window Canvas API
   app.get('/api/connected-apps/windows', async (c) => {

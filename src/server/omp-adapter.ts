@@ -42,8 +42,22 @@ import {
   type ObservedSpatialNode,
   type HGamRuntimeEvaluation,
 } from './app-memory.js';
+import { AgentSwarmOrchestrator } from './agent-swarm-orchestrator.js';
+import type {
+  AgentHandoffEnvelope,
+  AgentRoleDefinition,
+  AgentSpecialization,
+  HandoffResult,
+  SwarmProgressEvent,
+} from './swarm-types.js';
+import type { WorkspaceStore } from './workspace.js';
+import type { Dot } from '../shared/types.js';
 
 const MAX_REACT_STEPS = 8;
+const MAX_DELEGATION_DEPTH = 1;
+const DELEGATE_TIMEOUT_MS = 35_000;
+const SUB_AGENT_MAX_STEPS = 4;
+const SUB_AGENT_STEP_TIMEOUT_MS = 20_000;
 
 interface ReActToolCall {
   thought?: string;
@@ -61,9 +75,35 @@ interface ReActToolCall {
     | 'press_key_in_workspace'
     | 'navigate_browser'
     | 'act_pause'
+    | 'delegate_to_dot'
     | 'final_answer';
   args?: Record<string, unknown>;
   answer?: string;
+}
+
+export interface OmpRuntimeContext {
+  workspace?: WorkspaceStore;
+  currentDot?: Dot;
+  spaceId?: string;
+  threadId: string;
+  delegationDepth: number;
+  maxDelegationDepth: number;
+  collaborators: Dot[];
+  activeSurface: ActiveSurface | null;
+  progressEvents: string[];
+  onProgress?: (message: string) => void;
+}
+
+interface OmpReActResult {
+  finalReply: string;
+  logs: ExecutionLogEntry[];
+  paused: boolean;
+  timedOut: boolean;
+}
+
+interface OmpSandboxOptions {
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface ExecutionLogEntry {
@@ -271,10 +311,11 @@ async function resolveBoundSurface(userPrompt?: string): Promise<BoundSurfaceRes
   return { surface: null };
 }
 
-function buildReActSystemPrompt(
+export function buildReActSystemPrompt(
   surface: ActiveSurface | null,
   userPrompt = '',
   runtimeEval: HGamRuntimeEvaluation | null = null,
+  runtime?: OmpRuntimeContext,
 ): string {
   let memoryContext = '';
   if (surface) {
@@ -309,14 +350,43 @@ function buildReActSystemPrompt(
         `- Beritahu pengguna secara ramah bahwa belum ada jendela aplikasi yang terikat di panel workspace kanan.`,
       ].join('\n');
 
+  const dotContext = runtime?.currentDot
+    ? [
+        `DOT AKTIF: "${runtime.currentDot.name}" (${runtime.currentDot.id})`,
+        `INSTRUKSI DOT: ${runtime.currentDot.instructions || 'Tidak ada instruksi khusus.'}`,
+      ].join('\n')
+    : '';
+  const canDelegate = Boolean(
+    runtime &&
+      runtime.delegationDepth < runtime.maxDelegationDepth &&
+      runtime.collaborators.length > 0,
+  );
+  const delegationContext = canDelegate
+    ? [
+        `DELEGASI DOT: Anda boleh mendelegasikan subtugas kepada Dot lain di Space yang sama.`,
+        `Gunakan tool "delegate_to_dot" hanya jika subtugas benar-benar lebih cocok dikerjakan Dot lain.`,
+        `Dot yang tersedia:`,
+        ...runtime!.collaborators.map(
+          (dot) =>
+            `- id: ${dot.id} | nama: ${dot.name} | instruksi: ${dot.instructions.slice(0, 240)}`,
+        ),
+      ].join('\n')
+    : runtime && runtime.delegationDepth >= runtime.maxDelegationDepth
+      ? `DELEGASI DOT: Dinonaktifkan untuk sesi ini (delegationDepth=${runtime.delegationDepth}). Selesaikan tugas sendiri; jangan memanggil delegate_to_dot.`
+      : '';
+
   return [
     `OPEN_DOTS: TRUE AUTONOMOUS REACT TOOL-CALLING AGENT SPECIFICATION`,
     `INSTRUKSI MUTLAK UNTUK AI CODING AGENT:`,
     `Dokumen ini adalah panduan implementasi teknis untuk bertindak sebagai ReAct (Reasoning + Acting) Agent otonom sejati di dalam panel kanan OpenDots.`,
-    `Dilarang keras menggunakan kata kunci rekayasa regex. Model AI langsung diberikan instrumen tool resmi (observe_workspace, click_workspace, type_in_workspace, press_key_in_workspace, navigate_browser, final_answer).`,
+    `Dilarang keras menggunakan kata kunci rekayasa regex. Model AI langsung diberikan instrumen tool resmi (observe_workspace, click_workspace, type_in_workspace, press_key_in_workspace, navigate_browser, final_answer${canDelegate ? ', dan delegate_to_dot' : ''}).`,
     `Dilarang menggunakan karakter emoji dalam pemikiran maupun jawaban akhir.`,
     ``,
     surfaceContext,
+    '',
+    dotContext,
+    '',
+    delegationContext,
     '',
     memoryContext,
     '',
@@ -338,11 +408,17 @@ function buildReActSystemPrompt(
     `   Args: { "target": { "kind": "display_index", "value": number }, "action": string }`,
     `8. "navigate_browser": Membuka atau menavigasikan URL di dalam browser "${surface?.app_name ?? 'aktif'}" (hanya jika jenis aplikasi adalah browser).`,
     `   Args: { "url": string } (contoh: { "url": "google.com" } atau { "url": "https://google.com" }).`,
-    `9. "final_answer": Mengakhiri siklus ReAct dan memberikan jawaban akhir yang ramah, jujur, dan jelas kepada pengguna.`,
     `9. "act_pause": Menghentikan sementara otomasi background dan menyerahkan kendali kepada pengguna manusia (Human Takeover) jika diperlukan tindakan sensitif, persetujuan pengguna, atau verifikasi manual (misal: PIN sandi, 2FA OTP, konfirmasi transaksi, verifikasi CAPTCHA, atau panggilan telepon).`,
     `   Args: { "reason": string, "expected_state"?: string }`,
     `10. "final_answer": Mengakhiri siklus ReAct dan memberikan jawaban akhir yang ramah, jujur, dan jelas kepada pengguna.`,
     `   Args: {} (isi field "answer" pada level root JSON).`,
+    ...(canDelegate
+      ? [
+          `11. "delegate_to_dot": Mendelegasikan subtugas yang spesifik dan mandiri kepada Dot lain di Space yang sama.`,
+          `   Args: { "dot_id"?: string, "name"?: string, "objective": string, "context"?: string }`,
+          `   Gunakan "dot_id" dari daftar Dot yang tersedia. Jangan mendelegasikan seluruh tugas utama; berikan objective yang jelas dan dapat diselesaikan sendiri oleh Dot tujuan.`,
+        ]
+      : []),
     ``,
     `ATURAN PENALARAN REACT (Autonomous Observe-Think-Act-Verify Loop):`,
     `- Anda adalah Autonomous Agent yang berpikir mandiri tanpa ada aturan regex hardcoded.`,
@@ -362,6 +438,12 @@ function buildReActSystemPrompt(
     `Setiap respons Anda WAJIB berupa 1 objek JSON murni (tanpa penjelasan di luar JSON):`,
     `Jika memanggil tool:`,
     `{"thought": "Alasan singkat langkah ini", "tool": "observe_workspace", "args": {"query": "#dowhatexcites", "provider": "apple_vision"}}`,
+    ...(canDelegate
+      ? [
+          `Jika mendelegasikan:`,
+          `{"thought": "Subtask ini lebih cocok untuk Dot lain", "tool": "delegate_to_dot", "args": {"dot_id": "<id>", "objective": "Tugas spesifik yang harus diselesaikan", "context": "Konteks pendukung"}}`,
+        ]
+      : []),
     `Jika selesai dan menjawab pengguna:`,
     `{"thought": "Tugas selesai", "tool": "final_answer", "answer": "Penjelasan lengkap kepada pengguna dalam bahasa Indonesia."}`,
   ].join('\n');
@@ -406,7 +488,13 @@ function parseReActDecision(rawOutput: string): ReActToolCall {
   };
 }
 
-async function executeOmpSandboxed(prompt: string): Promise<string> {
+async function executeOmpSandboxed(
+  prompt: string,
+  options: OmpSandboxOptions = {},
+): Promise<string> {
+  const { timeoutMs = 60_000, signal } = options;
+  if (signal?.aborted) throw new Error('OMP execution aborted.');
+
   const { promise, resolve, reject } = withResolvers<string>();
   const env = { ...process.env, PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin` };
 
@@ -430,6 +518,22 @@ async function executeOmpSandboxed(prompt: string): Promise<string> {
 
   let stdout = '';
   let stderr = '';
+  let settled = false;
+  const settle = (value: string) => {
+    if (settled) return;
+    settled = true;
+    resolve(value);
+  };
+  const fail = (error: unknown) => {
+    if (settled) return;
+    settled = true;
+    reject(error);
+  };
+  const stopProcess = () => {
+    try {
+      proc.kill('SIGKILL');
+    } catch {}
+  };
 
   proc.stdout.on('data', (d) => {
     stdout += d.toString();
@@ -437,12 +541,14 @@ async function executeOmpSandboxed(prompt: string): Promise<string> {
   proc.stderr.on('data', (d) => {
     stderr += d.toString();
   });
+  // A killed OMP process can close stdin before the write completes.
+  proc.stdin.on('error', () => {});
 
-  proc.on('close', (code) => {
+  proc.on('close', () => {
     if (stdout.trim().length > 0) {
-      resolve(stdout.trim());
+      settle(stdout.trim());
     } else {
-      resolve(
+      settle(
         JSON.stringify({
           tool: 'final_answer',
           answer: stderr.trim() || 'OMP selesai memproses giliran.',
@@ -452,32 +558,288 @@ async function executeOmpSandboxed(prompt: string): Promise<string> {
   });
 
   proc.on('error', (err) => {
-    reject(err);
+    fail(err);
   });
+
+  const onAbort = () => {
+    stopProcess();
+    fail(new Error('OMP execution aborted.'));
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
+  if (signal?.aborted) onAbort();
 
   proc.stdin.write(prompt);
   proc.stdin.end();
 
   const timer = setTimeout(() => {
-    try {
-      proc.kill('SIGKILL');
-    } catch {}
-    resolve(
+    stopProcess();
+    settle(
       JSON.stringify({
         tool: 'final_answer',
         answer: 'Waktu tunggu penalaran OMP habis. Tindakan telah dihentikan.',
       }),
     );
-  }, 60000);
+  }, timeoutMs);
 
-  return promise.finally(() => clearTimeout(timer));
+  return promise.finally(() => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  });
+}
+
+function inferSpecialization(dot: Dot): AgentSpecialization {
+  const text = `${dot.name} ${dot.instructions}`.toLowerCase();
+  if (/(critic|review|security|audit)/.test(text)) return 'critic_reviewer';
+  if (/(research|riset|analyst|investigat)/.test(text)) return 'researcher';
+  if (/(code|coding|script|developer|engineer)/.test(text)) return 'coder';
+  if (/(troubleshoot|recover|repair|debug)/.test(text)) return 'troubleshooter';
+  return 'cua_operator';
+}
+
+function buildAgentRole(dot: Dot, boundAppName?: string): AgentRoleDefinition {
+  return {
+    dotId: dot.id,
+    name: dot.name,
+    avatarBadge: `[${dot.name}]`,
+    specialization: inferSpecialization(dot),
+    boundAppName,
+    systemInstructions: dot.instructions,
+    allowedTools: [
+      'observe_workspace',
+      'click_workspace',
+      'type_in_workspace',
+      'press_key_in_workspace',
+      'navigate_browser',
+      'final_answer',
+    ],
+    maxContextTokens: 8000,
+    timeoutMs: DELEGATE_TIMEOUT_MS,
+  };
+}
+
+export function resolveDelegationTarget(
+  args: Record<string, unknown>,
+  runtime: OmpRuntimeContext,
+): { target?: Dot; error?: string } {
+  if (!runtime.collaborators.length) {
+    return {
+      error:
+        'Tidak ada Dot lain di Space ini. Selesaikan tugas sendiri tanpa delegate_to_dot.',
+    };
+  }
+
+  const rawId =
+    typeof args.dot_id === 'string'
+      ? args.dot_id
+      : typeof args.dotId === 'string'
+        ? args.dotId
+        : '';
+  const rawName =
+    typeof args.name === 'string'
+      ? args.name
+      : typeof args.dot_name === 'string'
+        ? args.dot_name
+        : typeof args.dotName === 'string'
+          ? args.dotName
+          : '';
+
+  const target = rawId
+    ? runtime.collaborators.find((dot) => dot.id === rawId)
+    : rawName
+      ? runtime.collaborators.find(
+          (dot) => dot.name.toLowerCase() === rawName.trim().toLowerCase(),
+        )
+      : runtime.collaborators.length === 1
+        ? runtime.collaborators[0]
+        : undefined;
+
+  if (!target) {
+    return {
+      error: `Dot tujuan tidak ditemukan. Pilih salah satu: ${runtime.collaborators
+        .map((dot) => `${dot.name} (${dot.id})`)
+        .join(', ')}.`,
+    };
+  }
+
+  return { target };
+}
+
+async function handleDelegateToDot(
+  args: Record<string, unknown>,
+  runtime: OmpRuntimeContext,
+): Promise<string> {
+  if (!runtime.workspace || !runtime.currentDot || !runtime.spaceId) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        'Delegasi tidak tersedia karena konteks workspace/Dot belum terhubung.',
+    });
+  }
+  if (runtime.delegationDepth >= runtime.maxDelegationDepth) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        'Delegasi diblokir oleh recursion guard. Selesaikan tugas ini sendiri tanpa mendelegasikan ulang.',
+    });
+  }
+
+  const objective =
+    typeof args.objective === 'string'
+      ? args.objective.trim()
+      : typeof args.task === 'string'
+        ? args.task.trim()
+        : '';
+  if (!objective) {
+    return JSON.stringify({
+      ok: false,
+      error: 'Parameter objective wajib diisi untuk delegate_to_dot.',
+    });
+  }
+  const contextPayload = args.context;
+  const contextText =
+    typeof contextPayload === 'string'
+      ? contextPayload.slice(0, 4000)
+      : contextPayload
+        ? JSON.stringify(contextPayload).slice(0, 4000)
+        : '';
+
+  const resolved = resolveDelegationTarget(args, runtime);
+  if (!resolved.target) {
+    return JSON.stringify({ ok: false, error: resolved.error });
+  }
+  const target = resolved.target;
+  const fromRole = buildAgentRole(
+    runtime.currentDot,
+    runtime.activeSurface?.app_name,
+  );
+  const targetRole = buildAgentRole(target, runtime.activeSurface?.app_name);
+  const orchestrator = new AgentSwarmOrchestrator(
+    async (workerRole, envelope, signal) =>
+      executeDelegatedTurn(workerRole, envelope, signal, runtime),
+  );
+  orchestrator.registerRole(fromRole);
+  orchestrator.registerRole(targetRole);
+
+  const onProgress = (event: SwarmProgressEvent) => {
+    const message = `[${event.status}] ${event.activeDot.name}: ${event.handoverMessage}`;
+    if (runtime.progressEvents.length < 50) runtime.progressEvents.push(message);
+    try {
+      runtime.onProgress?.(message);
+    } catch {
+      // Progress reporting must never break the delegated task.
+    }
+  };
+  orchestrator.on('swarm:progress', onProgress);
+
+  try {
+    const result = await orchestrator.executeDelegation({
+      spaceId: runtime.spaceId,
+      threadId: runtime.threadId,
+      fromDotId: runtime.currentDot.id,
+      targetDotId: target.id,
+      objective,
+      context: {
+        success: true,
+        executiveSummary: objective,
+        structuredPayload: {
+          fromDot: runtime.currentDot.name,
+          context: contextText,
+        },
+        artifactPaths: [],
+        verificationNotes: [],
+        confidenceScore: 1.0,
+      },
+    });
+    return JSON.stringify({
+      ok: result.success,
+      delegated_to: { id: target.id, name: target.name },
+      result,
+    });
+  } catch (error) {
+    return JSON.stringify({
+      ok: false,
+      delegated_to: { id: target.id, name: target.name },
+      error: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    orchestrator.off('swarm:progress', onProgress);
+  }
+}
+
+async function executeDelegatedTurn(
+  role: AgentRoleDefinition,
+  envelope: AgentHandoffEnvelope,
+  signal: AbortSignal,
+  parentRuntime: OmpRuntimeContext,
+): Promise<HandoffResult> {
+  const targetDot = parentRuntime.workspace?.dot(role.dotId);
+  if (!targetDot) throw new Error(`Dot ${role.dotId} tidak ditemukan.`);
+
+  const childRuntime: OmpRuntimeContext = {
+    ...parentRuntime,
+    currentDot: targetDot,
+    delegationDepth: parentRuntime.delegationDepth + 1,
+    collaborators: [],
+    progressEvents: parentRuntime.progressEvents,
+    onProgress: parentRuntime.onProgress,
+  };
+  const contextText = JSON.stringify(
+    envelope.distilledContext.structuredPayload ?? {},
+  ).slice(0, 4000);
+  const transcript = `Tugas ini didelegasikan oleh "${envelope.fromDotId}" (${envelope.fromRole}).\nKonteks: ${contextText}`;
+
+  const result = await runOmpReAct({
+    surface: parentRuntime.activeSurface,
+    prompt: envelope.taskObjective,
+    transcript,
+    runtime: childRuntime,
+    maxSteps: SUB_AGENT_MAX_STEPS,
+    perStepTimeoutMs: SUB_AGENT_STEP_TIMEOUT_MS,
+    signal,
+    logSink: [],
+    buildSystemPrompt: (runtimeEval) =>
+      buildReActSystemPrompt(
+        parentRuntime.activeSurface,
+        envelope.taskObjective,
+        runtimeEval,
+        childRuntime,
+      ),
+  });
+
+  if (result.timedOut) {
+    throw new Error(
+      `Delegated Dot "${role.name}" timed out after ${DELEGATE_TIMEOUT_MS}ms.`,
+    );
+  }
+
+  const notes = result.logs
+    .slice(-4)
+    .map(
+      (entry) => `${entry.tool}: ${(entry.observation ?? '').slice(0, 160)}`,
+    );
+  return {
+    success: Boolean(result.finalReply.trim()) && !result.paused,
+    executiveSummary: result.finalReply.slice(0, 1200),
+    structuredPayload: {
+      delegatedTask: envelope.taskObjective,
+      finalAnswer: result.finalReply,
+    },
+    artifactPaths: [],
+    verificationNotes: notes,
+    confidenceScore: result.paused ? 0.5 : 0.85,
+  };
 }
 
 async function executeWorkspaceTool(
   call: ReActToolCall,
   surface: ActiveSurface | null,
-  userPrompt = '',
+  userPrompt: string,
+  runtime: OmpRuntimeContext,
 ): Promise<string> {
+  if (call.tool === 'delegate_to_dot') {
+    return handleDelegateToDot(call.args ?? {}, runtime);
+  }
+
   if (!surface) {
     return JSON.stringify({
       ok: false,
@@ -1012,12 +1374,137 @@ async function executeWorkspaceTool(
   }
 }
 
-export async function handleOmpChatCompletion(c: Context) {
+async function runOmpReAct(options: {
+  surface: ActiveSurface | null;
+  prompt: string;
+  transcript: string;
+  runtime: OmpRuntimeContext;
+  maxSteps: number;
+  perStepTimeoutMs: number;
+  signal?: AbortSignal;
+  logSink: ExecutionLogEntry[];
+  buildSystemPrompt: (
+    runtimeEval: HGamRuntimeEvaluation | null,
+  ) => string;
+}): Promise<OmpReActResult> {
+  const {
+    surface,
+    prompt,
+    transcript,
+    runtime,
+    maxSteps,
+    perStepTimeoutMs,
+    signal,
+    logSink,
+    buildSystemPrompt,
+  } = options;
+  const scratchpad: string[] = [];
+  const logs: ExecutionLogEntry[] = [];
+  let finalReply = '';
+  let paused = false;
+  let timedOut = false;
+
+  for (let step = 1; step <= maxSteps; step++) {
+    signal?.throwIfAborted();
+    const dynamicSystemPrompt = buildSystemPrompt(latestHGamEvaluation);
+    const stepPrompt = [
+      dynamicSystemPrompt,
+      '',
+      'RIWAYAT PERCAKAPAN:',
+      transcript || 'Belum ada riwayat percakapan.',
+      '',
+      `INSTRUKSI PENGGUNA SAAT INI: "${prompt}"`,
+      '',
+      scratchpad.length > 0
+        ? `JEJAK EKSEKUSI REACT SEJAUH INI:\n${scratchpad.join('\n\n')}`
+        : surface
+          ? 'Belum ada tool yang dipanggil pada giliran ini. Mulai dengan memanggil bcu_observe untuk mendeteksi State layar saat ini.'
+          : 'Tidak ada aplikasi aktif yang terikat. Jangan memanggil tool desktop; selesaikan tugas dengan penalaran atau gunakan final_answer.',
+      '',
+      `INSTRUKSI GILIRAN INI (Langkah ${step}/${maxSteps}):`,
+      'Berikan 1 objek JSON keputusan Anda berikutnya (tool call atau final_answer):',
+    ].join('\n');
+
+    const rawDecision = await executeOmpSandboxed(stepPrompt, {
+      timeoutMs: perStepTimeoutMs,
+      signal,
+    });
+    if (rawDecision.includes('Waktu tunggu penalaran OMP habis')) {
+      timedOut = true;
+    }
+    const decision = parseReActDecision(rawDecision);
+
+    if (decision.tool === 'final_answer') {
+      finalReply =
+        decision.answer || 'Selesai menjalankan instruksi di workspace Anda.';
+      break;
+    }
+
+    if (decision.tool === 'act_pause') {
+      const reason =
+        (decision.args?.reason as string) ||
+        'Konfirmasi manual pengguna diperlukan.';
+      await executeWorkspaceTool(decision, surface, prompt, runtime);
+      finalReply = `Kendali diserahkan kepada Anda: ${reason}. Silakan lakukan tindakan di layar (atau gunakan tombol Bawa ke Depan di kanvas Workspace), lalu klik "Lanjutkan Otomasi" jika sudah selesai.`;
+      paused = true;
+      break;
+    }
+
+    console.log(`\n======================================================`);
+    console.log(`[REACT STEP ${step}/${maxSteps}]`);
+    console.log(`THOUGHT: ${decision.thought ?? 'Thinking...'}`);
+    console.log(`ACTION: ${decision.tool}`, JSON.stringify(decision.args ?? {}));
+    const observation = await executeWorkspaceTool(
+      decision,
+      surface,
+      prompt,
+      runtime,
+    );
+    console.log(`OBSERVATION: ${observation.slice(0, 300)}...`);
+    console.log(`======================================================\n`);
+
+    const entry: ExecutionLogEntry = {
+      step,
+      thought: decision.thought,
+      tool: decision.tool,
+      args: decision.args,
+      observation: observation.slice(0, 500),
+      timestamp: Date.now(),
+    };
+    logs.push(entry);
+    logSink.push(entry);
+
+    scratchpad.push(
+      `[STEP ${step} ACTION]: ${JSON.stringify({ thought: decision.thought, tool: decision.tool, args: decision.args })}\n[STEP ${step} OBSERVATION]: ${observation}`,
+    );
+    if (step === maxSteps) {
+      finalReply =
+        'Batas langkah penalaran tercapai. Tindakan telah dijalankan pada jendela workspace Anda.';
+    }
+  }
+
+  if (logs.length > 0 && !finalReply.includes('Jejak Langkah')) {
+    const stepSummary = logs
+      .map((entry) => `- Langkah ${entry.step}: ${entry.thought || entry.tool} (\`${entry.tool}\`)`)
+      .join('\n');
+    finalReply = `${finalReply}\n\n**Jejak Langkah Tindakan:**\n${stepSummary}`;
+  }
+
+  return { finalReply, logs, paused, timedOut };
+}
+
+export async function handleOmpChatCompletion(
+  c: Context,
+  platform?: { workspace: WorkspaceStore },
+) {
   try {
     const body = (await c.req.json().catch(() => ({}))) as {
       messages?: Array<{ role?: string; content?: unknown }>;
       stream?: boolean;
       model?: string;
+      dotId?: string;
+      spaceId?: string;
+      threadId?: string;
     };
     const messages = Array.isArray(body.messages) ? body.messages : [];
 
@@ -1059,79 +1546,74 @@ export async function handleOmpChatCompletion(c: Context) {
         ],
       });
     }
+    const workspace = platform?.workspace;
+    const requestedDotId =
+      typeof body.dotId === 'string' ? body.dotId : undefined;
+    const currentDot = workspace
+      ? requestedDotId
+        ? workspace.dot(requestedDotId)
+        : workspace.dots()[0]
+      : undefined;
+    const spaceId =
+      currentDot &&
+      typeof body.spaceId === 'string' &&
+      currentDot.spaceIds.includes(body.spaceId)
+        ? body.spaceId
+        : currentDot?.spaceId;
+    const collaborators =
+      workspace && currentDot && spaceId
+        ? workspace
+            .dots()
+            .filter(
+              (dot) =>
+                dot.id !== currentDot.id && dot.spaceIds.includes(spaceId),
+            )
+        : [];
+    const progressEvents: string[] = [];
+    const runtime: OmpRuntimeContext = {
+      workspace,
+      currentDot,
+      spaceId,
+      threadId:
+        typeof body.threadId === 'string' && body.threadId
+          ? body.threadId
+          : 'omp-chat',
+      delegationDepth: 0,
+      maxDelegationDepth: MAX_DELEGATION_DEPTH,
+      collaborators,
+      activeSurface,
+      progressEvents,
+      onProgress: (message) => console.log(`[SWARM] ${message}`),
+    };
+
     latestHGamEvaluation = null;
-    const scratchpad: string[] = [];
-    let finalReply = '';
+    latestExecutionLogs = [];
 
     // 3. Autonomous ReAct Execution Loop (max 8 steps)
-    for (let step = 1; step <= MAX_REACT_STEPS; step++) {
-      const dynamicSystemPrompt = buildReActSystemPrompt(
-        activeSurface,
-        promptStr,
-        latestHGamEvaluation,
-      );
-
-      const stepPrompt = [
-        dynamicSystemPrompt,
-        '',
-        'RIWAYAT PERCAKAPAN:',
-        conversationTranscript || 'Belum ada riwayat percakapan.',
-        '',
-        `INSTRUKSI PENGGUNA SAAT INI: "${promptStr}"`,
-        '',
-        scratchpad.length > 0
-          ? `JEJAK EKSEKUSI REACT SEJAUH INI:\n${scratchpad.join('\n\n')}`
-          : 'Belum ada tool yang dipanggil pada giliran ini. Mulai dengan memanggil bcu_observe untuk mendeteksi State layar saat ini.',
-        '',
-        `INSTRUKSI GILIRAN INI (Langkah ${step}/${MAX_REACT_STEPS}):`,
-        'Berikan 1 objek JSON keputusan Anda berikutnya (tool call atau final_answer):',
-      ].join('\n');
-
-      const rawDecision = await executeOmpSandboxed(stepPrompt);
-      const decision = parseReActDecision(rawDecision);
-
-      if (decision.tool === 'final_answer') {
-        finalReply = decision.answer || 'Selesai menjalankan instruksi di workspace Anda.';
-        break;
-      }
-
-      if (decision.tool === 'act_pause') {
-        const reason = (decision.args?.reason as string) || 'Konfirmasi manual pengguna diperlukan.';
-        await executeWorkspaceTool(decision, activeSurface, promptStr);
-        finalReply = `Kendali diserahkan kepada Anda: ${reason}. Silakan lakukan tindakan di layar (atau gunakan tombol Bawa ke Depan di kanvas Workspace), lalu klik "Lanjutkan Otomasi" jika sudah selesai.`;
-        break;
-      }
-      console.log(`\n======================================================`);
-      console.log(`[REACT STEP ${step}/${MAX_REACT_STEPS}]`);
-      console.log(`THOUGHT: ${decision.thought ?? 'Thinking...'}`);
-      console.log(`ACTION: ${decision.tool}`, JSON.stringify(decision.args ?? {}));
-      const observation = await executeWorkspaceTool(decision, activeSurface, promptStr);
-      console.log(`OBSERVATION: ${observation.slice(0, 300)}...`);
-      console.log(`======================================================\n`);
-
-      latestExecutionLogs.push({
-        step,
-        thought: decision.thought,
-        tool: decision.tool,
-        args: decision.args,
-        observation: observation.slice(0, 500),
-        timestamp: Date.now(),
-      });
-
-      scratchpad.push(
-        `[STEP ${step} ACTION]: ${JSON.stringify({ thought: decision.thought, tool: decision.tool, args: decision.args })}\n[STEP ${step} OBSERVATION]: ${observation}`,
-      );
-      if (step === MAX_REACT_STEPS) {
-        finalReply =
-          'Batas langkah penalaran tercapai. Tindakan telah dijalankan pada jendela workspace Anda.';
-      }
-    }
-
-    if (latestExecutionLogs.length > 0 && !finalReply.includes('Jejak Langkah')) {
-      const stepSummary = latestExecutionLogs
-        .map((l) => `- Langkah ${l.step}: ${l.thought || l.tool} (\`${l.tool}\`)`)
+    const reactResult = await runOmpReAct({
+      surface: activeSurface,
+      prompt: promptStr,
+      transcript: conversationTranscript,
+      runtime,
+      maxSteps: MAX_REACT_STEPS,
+      perStepTimeoutMs: 60_000,
+      logSink: latestExecutionLogs,
+      buildSystemPrompt: (runtimeEval) =>
+        buildReActSystemPrompt(
+          activeSurface,
+          promptStr,
+          runtimeEval,
+          runtime,
+        ),
+    });
+    let finalReply =
+      reactResult.finalReply || 'Selesai memproses permintaan Anda.';
+    if (progressEvents.length > 0) {
+      const trace = progressEvents
+        .slice(-10)
+        .map((line) => `- ${line}`)
         .join('\n');
-      finalReply = `${finalReply}\n\n**Jejak Langkah Tindakan:**\n${stepSummary}`;
+      finalReply = `${finalReply}\n\n**Delegation Trace:**\n${trace}`;
     }
     const isStreaming = Boolean(body.stream);
     const id = `chatcmpl-${Date.now()}`;

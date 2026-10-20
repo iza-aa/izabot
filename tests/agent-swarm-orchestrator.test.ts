@@ -171,6 +171,74 @@ describe('AgentSwarmOrchestrator', () => {
     expect(visitedSignatureCount(orchestrator)).toBe(0);
   });
 
+  it('runs a single delegated turn and cleans its workflow state', async () => {
+    const executeAgent: AgentExecutorFn = vi.fn(async (role) => ({
+      success: true,
+      executiveSummary: `${role.name} completed the delegated task.`,
+      structuredPayload: {},
+      artifactPaths: [],
+      verificationNotes: [],
+      confidenceScore: 0.9,
+    }));
+    const orchestrator = new AgentSwarmOrchestrator(executeAgent);
+    orchestrator.registerRole(researcherRole);
+    orchestrator.registerRole(coderRole);
+
+    const events: string[] = [];
+    orchestrator.on('swarm:progress', (event) => {
+      events.push(`${event.status}:${event.activeDot.dotId}`);
+    });
+
+    const result = await orchestrator.executeDelegation({
+      spaceId: 'space-1',
+      threadId: 'thread-1',
+      fromDotId: researcherRole.dotId,
+      targetDotId: coderRole.dotId,
+      objective: 'Implement the delegated task.',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.executiveSummary).toContain('completed the delegated task');
+    expect(executeAgent).toHaveBeenCalledTimes(1);
+    expect(events).toContain(`ASSIGNED:${coderRole.dotId}`);
+    expect(events).toContain(`COMPLETED:${coderRole.dotId}`);
+    expect(visitedSignatureCount(orchestrator)).toBe(0);
+  });
+
+  it('fails a delegated ticket when the worker times out', async () => {
+    const executeAgent: AgentExecutorFn = vi.fn(
+      (_role, _envelope, signal) =>
+        new Promise<never>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => reject(new Error('worker aborted')),
+            { once: true },
+          );
+        }),
+    );
+    const orchestrator = new AgentSwarmOrchestrator(executeAgent);
+    orchestrator.registerRole(researcherRole);
+    orchestrator.registerRole({ ...coderRole, timeoutMs: 20 });
+
+    const events: string[] = [];
+    orchestrator.on('swarm:progress', (event) => {
+      events.push(`${event.status}:${event.activeDot.dotId}`);
+    });
+
+    await expect(
+      orchestrator.executeDelegation({
+        spaceId: 'space-1',
+        threadId: 'thread-1',
+        fromDotId: researcherRole.dotId,
+        targetDotId: coderRole.dotId,
+        objective: 'This task will time out.',
+      }),
+    ).rejects.toThrow('worker aborted');
+
+    expect(events).toContain(`FAILED:${coderRole.dotId}`);
+    expect(visitedSignatureCount(orchestrator)).toBe(0);
+  });
+
   it('triggers critic revision feedback loop and retries when rejected', async () => {
     let coderAttempts = 0;
     const executeAgent: AgentExecutorFn = vi.fn(async (role) => {

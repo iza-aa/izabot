@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildReActSystemPrompt,
+  delegatedTaskNeedsSurface,
   resolveDelegationTarget,
   type OmpRuntimeContext,
 } from '../src/server/omp-adapter.js';
@@ -29,6 +30,7 @@ function makeRuntime(
     threadId: 'thread-1',
     delegationDepth: 0,
     maxDelegationDepth: 1,
+    delegationAttempts: 0,
     collaborators: [],
     activeSurface: null,
     progressEvents: [],
@@ -73,6 +75,19 @@ describe('delegate_to_dot prompt guard', () => {
 
     expect(prompt).not.toContain('11. "delegate_to_dot"');
     expect(prompt).toContain('DELEGASI DOT: Dinonaktifkan');
+    expect(prompt).toContain('DELEGATED TASK');
+  });
+
+  it('only gives delegated workers a desktop surface when the task needs one', () => {
+    expect(delegatedTaskNeedsSurface('Balas hanya dengan kata BANANA.')).toBe(
+      false,
+    );
+    expect(
+      delegatedTaskNeedsSurface('Buka Spotify lalu klik tombol play.'),
+    ).toBe(true);
+    expect(
+      delegatedTaskNeedsSurface('Ringkas isi jendela Safari yang aktif.'),
+    ).toBe(true);
   });
 
   it('resolves a target by id, name, or the only collaborator', () => {

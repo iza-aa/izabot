@@ -63,9 +63,11 @@ import type { Dot } from '../shared/types.js';
 
 const MAX_REACT_STEPS = 8;
 const MAX_DELEGATION_DEPTH = 1;
-const DELEGATE_TIMEOUT_MS = 35_000;
+// A single OMP call can take ~30s in this environment. Keep the worker under
+// the 90s runner cap while leaving room for the parent Dot to answer.
+const DELEGATE_TIMEOUT_MS = 55_000;
 const SUB_AGENT_MAX_STEPS = 4;
-const SUB_AGENT_STEP_TIMEOUT_MS = 20_000;
+const SUB_AGENT_STEP_TIMEOUT_MS = 45_000;
 const JIT_PREVIEW_CHARS = 600;
 
 interface ReActToolCall {
@@ -104,6 +106,7 @@ export interface OmpRuntimeContext {
   threadId: string;
   delegationDepth: number;
   maxDelegationDepth: number;
+  delegationAttempts: number;
   collaborators: Dot[];
   activeSurface: ActiveSurface | null;
   progressEvents: string[];
@@ -398,6 +401,13 @@ export function buildReActSystemPrompt(
       runtime.currentDot &&
       runtime.spaceId,
   );
+  const delegatedContext =
+    runtime && runtime.delegationDepth > 0
+      ? [
+          `DELEGATED TASK: Anda adalah sub-agen yang menerima satu objective dari Dot lain.`,
+          `Fokus hanya pada objective tersebut. Jika objective tidak memerlukan aplikasi desktop, langsung gunakan final_answer. Jangan mengamati atau mengubah aplikasi yang tidak relevan.`,
+        ].join('\n')
+      : '';
   const jitContext = canUseJit
     ? [
         `JIT SCRIPT: Anda dapat memakai "jit_synthesize_and_run" untuk tugas deterministik yang lebih aman diselesaikan dengan skrip (transformasi data, HTTP/JSON, parsing file).`,
@@ -420,6 +430,8 @@ export function buildReActSystemPrompt(
     dotContext,
     '',
     delegationContext,
+    '',
+    delegatedContext,
     '',
     jitContext,
     '',
@@ -644,6 +656,13 @@ function inferSpecialization(dot: Dot): AgentSpecialization {
   return 'cua_operator';
 }
 
+const DELEGATED_DESKTOP_HINT =
+  /\b(desktop|aplikasi|app|jendela|window|layar|screen|klik|click|ketik|type|scroll|browser|safari|chrome|firefox|arc|whatsapp|telegram|spotify|email|surel|kirim|send|buka|open|tab|url|halaman|page|download|upload|screenshot|mouse|keyboard|kursor|cursor)\b/i;
+
+export function delegatedTaskNeedsSurface(objective: string): boolean {
+  return DELEGATED_DESKTOP_HINT.test(objective);
+}
+
 function buildAgentRole(dot: Dot, boundAppName?: string): AgentRoleDefinition {
   return {
     dotId: dot.id,
@@ -756,11 +775,26 @@ async function handleDelegateToDot(
     return JSON.stringify({ ok: false, error: resolved.error });
   }
   const target = resolved.target;
+  if (runtime.delegationAttempts >= 1) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        'Delegation budget for this turn is exhausted. Do not retry; report the failure to the user.',
+      retryable: false,
+      next_step: 'Answer the user with the failure and stop.',
+    });
+  }
+  runtime.delegationAttempts += 1;
   const fromRole = buildAgentRole(
     runtime.currentDot,
     runtime.activeSurface?.app_name,
   );
-  const targetRole = buildAgentRole(target, runtime.activeSurface?.app_name);
+  const targetRole = buildAgentRole(
+    target,
+    delegatedTaskNeedsSurface(objective)
+      ? runtime.activeSurface?.app_name
+      : undefined,
+  );
   const orchestrator = new AgentSwarmOrchestrator(
     async (workerRole, envelope, signal) =>
       executeDelegatedTurn(workerRole, envelope, signal, runtime),
@@ -802,12 +836,22 @@ async function handleDelegateToDot(
       ok: result.success,
       delegated_to: { id: target.id, name: target.name },
       result,
+      ...(result.success
+        ? {}
+        : {
+            retryable: false,
+            next_step:
+              'Do not retry this delegation in the current turn. Report the result to the user and stop.',
+          }),
     });
   } catch (error) {
     return JSON.stringify({
       ok: false,
       delegated_to: { id: target.id, name: target.name },
       error: error instanceof Error ? error.message : String(error),
+      retryable: false,
+      next_step:
+        'Do not retry this delegation in the current turn. Report the failure to the user and stop.',
     });
   } finally {
     orchestrator.off('swarm:progress', onProgress);
@@ -823,11 +867,15 @@ async function executeDelegatedTurn(
   const targetDot = parentRuntime.workspace?.dot(role.dotId);
   if (!targetDot) throw new Error(`Dot ${role.dotId} tidak ditemukan.`);
 
+  const childSurface = delegatedTaskNeedsSurface(envelope.taskObjective)
+    ? parentRuntime.activeSurface
+    : null;
   const childRuntime: OmpRuntimeContext = {
     ...parentRuntime,
     currentDot: targetDot,
     delegationDepth: parentRuntime.delegationDepth + 1,
     collaborators: [],
+    activeSurface: childSurface,
     progressEvents: parentRuntime.progressEvents,
     onProgress: parentRuntime.onProgress,
   };
@@ -837,7 +885,7 @@ async function executeDelegatedTurn(
   const transcript = `Tugas ini didelegasikan oleh "${envelope.fromDotId}" (${envelope.fromRole}).\nKonteks: ${contextText}`;
 
   const result = await runOmpReAct({
-    surface: parentRuntime.activeSurface,
+    surface: childSurface,
     prompt: envelope.taskObjective,
     transcript,
     runtime: childRuntime,
@@ -847,7 +895,7 @@ async function executeDelegatedTurn(
     logSink: [],
     buildSystemPrompt: (runtimeEval) =>
       buildReActSystemPrompt(
-        parentRuntime.activeSurface,
+        childSurface,
         envelope.taskObjective,
         runtimeEval,
         childRuntime,
@@ -1547,9 +1595,13 @@ async function runOmpReAct(options: {
       '',
       scratchpad.length > 0
         ? `JEJAK EKSEKUSI REACT SEJAUH INI:\n${scratchpad.join('\n\n')}`
-        : surface
-          ? 'Belum ada tool yang dipanggil pada giliran ini. Mulai dengan memanggil bcu_observe untuk mendeteksi State layar saat ini.'
-          : runtime.jitEnabled &&
+        : runtime.delegationDepth > 0
+          ? surface
+            ? 'Ini tugas delegasi. Jika objective memerlukan desktop, mulai dengan bcu_observe; jika tidak, langsung final_answer.'
+            : 'Ini tugas delegasi tanpa surface desktop. Jangan memanggil tool desktop; selesaikan dengan penalaran dan final_answer.'
+          : surface
+            ? 'Belum ada tool yang dipanggil pada giliran ini. Mulai dengan memanggil bcu_observe untuk mendeteksi State layar saat ini.'
+            : runtime.jitEnabled &&
               runtime.delegationDepth === 0 &&
               runtime.currentDot &&
               runtime.spaceId
@@ -1612,6 +1664,14 @@ async function runOmpReAct(options: {
     scratchpad.push(
       `[STEP ${step} ACTION]: ${JSON.stringify({ thought: decision.thought, tool: decision.tool, args: decision.args })}\n[STEP ${step} OBSERVATION]: ${observation}`,
     );
+    if (
+      decision.tool === 'delegate_to_dot' &&
+      observation.includes('"retryable":false')
+    ) {
+      finalReply =
+        'Delegasi tidak dapat diselesaikan pada giliran ini. Saya tidak mengulanginya agar tidak memakan waktu tambahan. Lihat Delegation Trace di bawah untuk detail kegagalan.';
+      break;
+    }
     if (
       decision.tool === 'jit_synthesize_and_run' &&
       observation.includes('"status":"approval_required"')
@@ -1856,6 +1916,7 @@ export async function handleOmpChatCompletion(
       threadId,
       delegationDepth: 0,
       maxDelegationDepth: MAX_DELEGATION_DEPTH,
+      delegationAttempts: 0,
       collaborators,
       activeSurface,
       progressEvents,

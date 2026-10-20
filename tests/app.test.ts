@@ -3,6 +3,7 @@ import { createApp } from '../src/server/app.js';
 import { Store } from '../src/server/store.js';
 import { Runner } from '../src/server/runner.js';
 import { resolveAppOrigins } from '../src/server/app-origin.js';
+import { consumeStreamTicket } from '../src/server/stream-tickets.js';
 const stores: Store[] = [];
 function fixture(token?: string, origin?: string | string[]) {
   const store = new Store(':memory:');
@@ -32,6 +33,24 @@ describe('API boundaries', () => {
       ).status,
     ).toBe(200);
   });
+  it('protects one-time window stream tickets with owner auth', async () => {
+    const { app } = fixture('private-token');
+    expect(
+      (await app.request('/api/connected-apps/stream-ticket/123')).status,
+    ).toBe(401);
+
+    const response = await app.request(
+      '/api/connected-apps/stream-ticket/123',
+      {
+        headers: { Authorization: 'Bearer private-token' },
+      },
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ticket: string };
+    expect(consumeStreamTicket(body.ticket, 123)).toBe(true);
+    expect(consumeStreamTicket(body.ticket, 123)).toBe(false);
+  });
+
   it('blocks browser cross-origin requests and form posts', async () => {
     const { app } = fixture();
     expect(

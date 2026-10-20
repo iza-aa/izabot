@@ -2,6 +2,7 @@
 // High-performance real-time window canvas receiving binary JPEG frames via WebSocket
 
 import { useEffect, useRef } from 'react';
+import { authHeaders } from './api';
 
 interface RealtimeWindowCanvasProps {
   windowId: number;
@@ -42,26 +43,34 @@ export function RealtimeWindowCanvas({
     let active = true;
     let rendering = false;
     let pendingBuffer: ArrayBuffer | null = null;
+    let ws: WebSocket | null = null;
 
-    // 1. Instantly paint the initial frame from HTTP capture endpoint so the canvas is NEVER blank
-    const initImg = new Image();
-    initImg.src = `/api/connected-apps/capture/${windowId}?t=${Date.now()}`;
-    initImg.onload = () => {
-      if (!active) return;
-      if (initImg.naturalWidth > 0 && initImg.naturalHeight > 0) {
-        if (canvas.width !== initImg.naturalWidth || canvas.height !== initImg.naturalHeight) {
-          canvas.width = initImg.naturalWidth;
-          canvas.height = initImg.naturalHeight;
-        }
-        ctx.drawImage(initImg, 0, 0);
+    const drawBlob = async (blob: Blob) => {
+      const bitmap = await createImageBitmap(blob);
+      if (!active) {
+        bitmap.close();
+        return;
       }
+      if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+      }
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
     };
 
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(
-      `${proto}//${location.host}/api/connected-apps/stream/${windowId}`,
-    );
-    ws.binaryType = 'arraybuffer';
+    // Paint the first frame through the authenticated capture endpoint.
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/connected-apps/capture/${windowId}?t=${Date.now()}`,
+          { headers: authHeaders() },
+        );
+        if (res.ok) await drawBlob(await res.blob());
+      } catch {
+        // The live stream will fill the canvas when it connects.
+      }
+    })();
 
     const renderNextFrame = async () => {
       if (rendering || !pendingBuffer || !active) return;
@@ -71,15 +80,7 @@ export function RealtimeWindowCanvas({
 
       try {
         const blob = new Blob([bufferToDraw], { type: 'image/jpeg' });
-        const bitmap = await createImageBitmap(blob);
-        if (active) {
-          if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
-            canvas.width = bitmap.width;
-            canvas.height = bitmap.height;
-          }
-          ctx.drawImage(bitmap, 0, 0);
-        }
-        bitmap.close();
+        await drawBlob(blob);
       } catch {
         // Discard frame on window resize transition
       } finally {
@@ -90,28 +91,56 @@ export function RealtimeWindowCanvas({
       }
     };
 
-    ws.onmessage = (event: MessageEvent<ArrayBuffer | string>) => {
-      if (typeof event.data === 'string') {
-        try {
-          const parsed = JSON.parse(event.data) as { type?: string; data?: unknown };
-          if (parsed.type === 'cursor' && parsed.data) {
-            onTelemetryRef.current?.(parsed.data);
-          }
-        } catch {}
-        return;
+    const connect = async () => {
+      let ticket = '';
+      try {
+        const res = await fetch(
+          `/api/connected-apps/stream-ticket/${windowId}`,
+          { headers: authHeaders() },
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { ticket?: string };
+          ticket = typeof data.ticket === 'string' ? data.ticket : '';
+        }
+      } catch {
+        // Without a ticket the server rejects the stream; capture still works.
       }
+      if (!active) return;
 
-      if (!(event.data instanceof ArrayBuffer)) return;
-      pendingBuffer = event.data;
-      if (!rendering) {
-        requestAnimationFrame(() => void renderNextFrame());
-      }
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const query = ticket ? `?ticket=${encodeURIComponent(ticket)}` : '';
+      ws = new WebSocket(
+        `${proto}//${location.host}/api/connected-apps/stream/${windowId}${query}`,
+      );
+      ws.binaryType = 'arraybuffer';
+      ws.onmessage = (event: MessageEvent<ArrayBuffer | string>) => {
+        if (typeof event.data === 'string') {
+          try {
+            const parsed = JSON.parse(event.data) as {
+              type?: string;
+              data?: unknown;
+            };
+            if (parsed.type === 'cursor' && parsed.data) {
+              onTelemetryRef.current?.(parsed.data);
+            }
+          } catch {}
+          return;
+        }
+
+        if (!(event.data instanceof ArrayBuffer)) return;
+        pendingBuffer = event.data;
+        if (!rendering) {
+          requestAnimationFrame(() => void renderNextFrame());
+        }
+      };
     };
+
+    void connect();
 
     return () => {
       active = false;
       try {
-        ws.close();
+        ws?.close();
       } catch {}
     };
   }, [windowId]);

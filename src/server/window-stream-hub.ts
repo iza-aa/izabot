@@ -4,10 +4,15 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { setCursorBroadcaster, getActiveSurface, setActiveSurface } from './active-surface.js';
+import {
+  setCursorBroadcaster,
+  getActiveSurface,
+  setActiveSurface,
+} from './active-surface.js';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { runPerceptionListWindows } from './perception-engine.js';
+import { consumeStreamTicket } from './stream-tickets.js';
 
 interface StreamSession {
   windowId: number;
@@ -35,9 +40,13 @@ function startStreamerProcess(session: StreamSession): void {
   if (session.proc) return;
 
   const binPath = resolveStreamerBinary();
-  const proc = spawn(binPath, ['stream-window', String(session.windowId), '30', '1280'], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const proc = spawn(
+    binPath,
+    ['stream-window', String(session.windowId), '30', '1280'],
+    {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
 
   session.proc = proc;
 
@@ -91,7 +100,10 @@ function startStreamerProcess(session: StreamSession): void {
   });
 }
 
-export function getLatestMemoryFrame(windowId: number, maxAgeMs = 250): Buffer | null {
+export function getLatestMemoryFrame(
+  windowId: number,
+  maxAgeMs = 250,
+): Buffer | null {
   const session = activeSessions.get(windowId);
   if (!session || !session.latestBuffer) return null;
   if (Date.now() - session.lastFrameAt > maxAgeMs) {
@@ -100,7 +112,10 @@ export function getLatestMemoryFrame(windowId: number, maxAgeMs = 250): Buffer |
   return session.latestBuffer;
 }
 
-export function broadcastCursorTelemetry(_windowId: number, payload: unknown): void {
+export function broadcastCursorTelemetry(
+  _windowId: number,
+  payload: unknown,
+): void {
   const message = JSON.stringify({ type: 'cursor', data: payload });
   for (const session of activeSessions.values()) {
     for (const client of session.clients) {
@@ -117,7 +132,10 @@ export function setupWebSocketStreaming(httpServer: HttpServer): void {
   setCursorBroadcaster(broadcastCursorTelemetry);
   const wss = new WebSocketServer({ noServer: true });
   httpServer.on('upgrade', (request, socket, head) => {
-    const url = new URL(request.url ?? '', `http://${request.headers.host ?? 'localhost'}`);
+    const url = new URL(
+      request.url ?? '',
+      `http://${request.headers.host ?? 'localhost'}`,
+    );
     const match = url.pathname.match(/^\/api\/connected-apps\/stream\/(\d+)$/);
 
     if (!match) {
@@ -130,63 +148,78 @@ export function setupWebSocketStreaming(httpServer: HttpServer): void {
       return;
     }
 
+    const ticket = url.searchParams.get('ticket') ?? '';
+    if (!consumeStreamTicket(ticket, windowId)) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request, windowId);
     });
   });
 
-  wss.on('connection', (ws: WebSocket, _request: IncomingMessage, windowId: number) => {
-    let session = activeSessions.get(windowId);
-    if (!session) {
-      session = {
-        windowId,
-        proc: null,
-        clients: new Set(),
-        latestBuffer: null,
-        lastFrameAt: 0,
-        lastStreamStdoutAt: 0,
-        consecutiveFailures: 0,
-        isCapturingFallback: false,
-        idleTimer: null,
-      };
-      activeSessions.set(windowId, session);
-    }
-
-    if (session.idleTimer) {
-      clearTimeout(session.idleTimer);
-      session.idleTimer = null;
-    }
-
-    session.clients.add(ws);
-
-    // Send immediate cached RAM frame if available
-    const initialBuf = session.latestBuffer ?? getLatestMemoryFrame(windowId, 5000);
-    if (initialBuf && initialBuf.length > 0 && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(initialBuf);
-      } catch {}
-    }
-
-    // Ensure native ScreenCaptureKit streamer is running
-    startStreamerProcess(session);
-    ws.on('close', () => {
-      session?.clients.delete(ws);
-      if (session && session.clients.size === 0) {
-        // Keep streamer alive for 15s in case of page reload, then kill to free GPU/CPU
-        session.idleTimer = setTimeout(() => {
-          if (session.clients.size === 0 && session.proc) {
-            try {
-              session.proc.kill('SIGTERM');
-            } catch {}
-            session.proc = null;
-            activeSessions.delete(windowId);
-          }
-        }, 15000);
+  wss.on(
+    'connection',
+    (ws: WebSocket, _request: IncomingMessage, windowId: number) => {
+      let session = activeSessions.get(windowId);
+      if (!session) {
+        session = {
+          windowId,
+          proc: null,
+          clients: new Set(),
+          latestBuffer: null,
+          lastFrameAt: 0,
+          lastStreamStdoutAt: 0,
+          consecutiveFailures: 0,
+          isCapturingFallback: false,
+          idleTimer: null,
+        };
+        activeSessions.set(windowId, session);
       }
-    });
 
-    ws.on('error', () => {
-      session?.clients.delete(ws);
-    });
-  });
+      if (session.idleTimer) {
+        clearTimeout(session.idleTimer);
+        session.idleTimer = null;
+      }
+
+      session.clients.add(ws);
+
+      // Send immediate cached RAM frame if available
+      const initialBuf =
+        session.latestBuffer ?? getLatestMemoryFrame(windowId, 5000);
+      if (
+        initialBuf &&
+        initialBuf.length > 0 &&
+        ws.readyState === WebSocket.OPEN
+      ) {
+        try {
+          ws.send(initialBuf);
+        } catch {}
+      }
+
+      // Ensure native ScreenCaptureKit streamer is running
+      startStreamerProcess(session);
+      ws.on('close', () => {
+        session?.clients.delete(ws);
+        if (session && session.clients.size === 0) {
+          // Keep streamer alive for 15s in case of page reload, then kill to free GPU/CPU
+          session.idleTimer = setTimeout(() => {
+            if (session.clients.size === 0 && session.proc) {
+              try {
+                session.proc.kill('SIGTERM');
+              } catch {}
+              session.proc = null;
+              activeSessions.delete(windowId);
+            }
+          }, 15000);
+        }
+      });
+
+      ws.on('error', () => {
+        session?.clients.delete(ws);
+      });
+    },
+  );
 }

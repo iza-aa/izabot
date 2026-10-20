@@ -14,8 +14,20 @@ import type { Platform } from './platform.js';
 import { VoiceService } from './voice.js';
 import { workspaceRoutes } from './workspace-routes.js';
 import { deleteAppMemory, listAppMemories } from './app-memory.js';
-import { setActiveSurface, getActiveSurface, setCursorAction, getCursorAction, bumpFrameVersion } from './active-surface.js';
-import { handleOmpChatCompletion, getLatestExecutionLogs, getTakeoverState, setTakeoverState } from './omp-adapter.js';
+import { issueStreamTicket, STREAM_TICKET_TTL } from './stream-tickets.js';
+import {
+  setActiveSurface,
+  getActiveSurface,
+  setCursorAction,
+  getCursorAction,
+  bumpFrameVersion,
+} from './active-surface.js';
+import {
+  handleOmpChatCompletion,
+  getLatestExecutionLogs,
+  getTakeoverState,
+  setTakeoverState,
+} from './omp-adapter.js';
 import {
   getConnectedWindows,
   captureWindowImage,
@@ -180,14 +192,23 @@ export function createApp({
     const checkBcu = async (url: string | null): Promise<boolean> => {
       if (!url) return false;
       try {
-        const bcuRes = await fetch(`${url}/v1/bootstrap`, { signal: AbortSignal.timeout(1500) });
+        const bcuRes = await fetch(`${url}/v1/bootstrap`, {
+          signal: AbortSignal.timeout(1500),
+        });
         if (bcuRes.ok) {
           bcuActive = true;
           const bcuData = (await bcuRes.json()) as {
-            permissions?: { accessibility?: { granted?: boolean }; screenRecording?: { granted?: boolean } };
+            permissions?: {
+              accessibility?: { granted?: boolean };
+              screenRecording?: { granted?: boolean };
+            };
           };
-          hasAccessibility = Boolean(bcuData.permissions?.accessibility?.granted);
-          hasScreenRecording = Boolean(bcuData.permissions?.screenRecording?.granted);
+          hasAccessibility = Boolean(
+            bcuData.permissions?.accessibility?.granted,
+          );
+          hasScreenRecording = Boolean(
+            bcuData.permissions?.screenRecording?.granted,
+          );
           return true;
         }
       } catch {}
@@ -263,9 +284,13 @@ export function createApp({
     };
     try {
       if (body.pane === 'accessibility') {
-        execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+        execSync(
+          'open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"',
+        );
       } else if (body.pane === 'screen-recording') {
-        execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"');
+        execSync(
+          'open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"',
+        );
       } else if (body.pane === 'reveal-binary') {
         let targetPath = tauriBinaryPath;
         if (body.target === 'bcu') {
@@ -275,7 +300,9 @@ export function createApp({
         }
         if (existsSync(targetPath)) {
           execSync(`open -R "${targetPath}"`);
-          execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+          execSync(
+            'open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"',
+          );
         }
       }
       return c.json({ ok: true });
@@ -285,9 +312,7 @@ export function createApp({
     }
   });
 
-  app.post('/v1/chat/completions', (c) =>
-    handleOmpChatCompletion(c, platform),
-  );
+  app.post('/v1/chat/completions', (c) => handleOmpChatCompletion(c, platform));
   app.post('/api/v1/chat/completions', (c) =>
     handleOmpChatCompletion(c, platform),
   );
@@ -326,7 +351,9 @@ export function createApp({
     return c.json(getActiveSurface());
   });
   app.get('/api/connected-apps/cursor', (c) => {
-    return c.json(getCursorAction() ?? { x: null, y: null, is_clicking: false });
+    return c.json(
+      getCursorAction() ?? { x: null, y: null, is_clicking: false },
+    );
   });
   app.get('/api/connected-apps/logs', (c) => {
     return c.json(getLatestExecutionLogs());
@@ -338,7 +365,9 @@ export function createApp({
     const state = getTakeoverState();
     if (state.app_name) {
       try {
-        execSync(`osascript -e 'tell application "${state.app_name}" to activate'`);
+        execSync(
+          `osascript -e 'tell application "${state.app_name}" to activate'`,
+        );
       } catch {}
     }
     return c.json({ ok: true, activated: true });
@@ -354,6 +383,17 @@ export function createApp({
     }
     return c.json({ ok: true, resumed: true });
   });
+  app.get('/api/connected-apps/stream-ticket/:windowId', (c) => {
+    const windowId = parseInt(c.req.param('windowId'), 10);
+    if (!windowId || isNaN(windowId)) {
+      return c.json({ error: 'Invalid window ID' }, 400);
+    }
+    return c.json({
+      ticket: issueStreamTicket(windowId),
+      expiresInMs: STREAM_TICKET_TTL,
+    });
+  });
+
   app.get('/api/connected-apps/capture/:windowId', (c) => {
     const windowId = parseInt(c.req.param('windowId'), 10);
     if (!windowId || isNaN(windowId)) {
@@ -393,7 +433,11 @@ export function createApp({
         try {
           const imageBuf = captureWindowImage(windowId);
           if (imageBuf && imageBuf.length > 0) {
-            await streamWriter.write(Buffer.from(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${imageBuf.length}\r\n\r\n`));
+            await streamWriter.write(
+              Buffer.from(
+                `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${imageBuf.length}\r\n\r\n`,
+              ),
+            );
             await streamWriter.write(imageBuf);
             await streamWriter.write(Buffer.from('\r\n'));
           }

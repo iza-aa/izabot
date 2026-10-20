@@ -15,6 +15,7 @@ import {
 import type { Page } from '../server/pages';
 import type { Conversation, Dot, Space, SpaceApp, Task } from '../shared/types';
 import { Mascot } from './Mascot';
+import { authHeaders } from './api';
 
 export function pageExcerpt(content: string) {
   return content
@@ -81,7 +82,7 @@ export function SpaceLibrary({
   const boundApps = spaceApps.filter((app) => app.spaceId === space.id);
   useEffect(() => {
     let active = true;
-    void fetch('/api/connected-apps/windows')
+    void fetch('/api/connected-apps/windows', { headers: authHeaders() })
       .then((res) => (res.ok ? res.json() : []))
       .then((list: { app_name?: string }[]) => {
         if (!active) return;

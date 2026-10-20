@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { RealtimeWindowCanvas } from './RealtimeWindowCanvas.js';
+import { authHeaders } from './api';
 import {
   AppWindow,
   RefreshCw,
@@ -242,7 +243,9 @@ export function ConnectedAppWorkspace({
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch('/api/connected-apps/takeover/status');
+        const res = await fetch('/api/connected-apps/takeover/status', {
+          headers: authHeaders(),
+        });
         if (res.ok) {
           const data = (await res.json()) as {
             active: boolean;
@@ -259,7 +262,7 @@ export function ConnectedAppWorkspace({
     try {
       await fetch('/api/connected-apps/takeover/activate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       });
     } catch {}
   };
@@ -268,14 +271,16 @@ export function ConnectedAppWorkspace({
     try {
       await fetch('/api/connected-apps/takeover/resume', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       });
       setTakeover({ active: false });
     } catch {}
   };
   const fetchWindows = useCallback(async () => {
     try {
-      const res = await fetch('/api/connected-apps/windows');
+      const res = await fetch('/api/connected-apps/windows', {
+        headers: authHeaders(),
+      });
       if (!res.ok) return;
       const list = (await res.json()) as ConnectedWindow[];
       setWindows(list);
@@ -283,7 +288,9 @@ export function ConnectedAppWorkspace({
 
       // Synchronize with active surface state from server
       try {
-        const surfRes = await fetch('/api/connected-apps/active-surface');
+        const surfRes = await fetch('/api/connected-apps/active-surface', {
+          headers: authHeaders(),
+        });
         if (surfRes.ok) {
           const surf = (await surfRes.json()) as { window_id?: number };
           if (surf && typeof surf.window_id === 'number') {
@@ -325,7 +332,7 @@ export function ConnectedAppWorkspace({
     try {
       await fetch('/api/connected-apps/active-surface', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(win),
       });
     } catch {
@@ -343,7 +350,9 @@ export function ConnectedAppWorkspace({
     let active = true;
     void (async () => {
       try {
-        const res = await fetch('/api/connected-apps/cursor');
+        const res = await fetch('/api/connected-apps/cursor', {
+          headers: authHeaders(),
+        });
         if (!res.ok || !active) return;
         const cur = (await res.json()) as CursorTelemetryPayload | null;
         if (
@@ -383,7 +392,7 @@ export function ConnectedAppWorkspace({
     try {
       await fetch('/api/connected-apps/click', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           x: clickX,
           y: clickY,

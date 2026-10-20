@@ -6,7 +6,7 @@ import {
 } from '../shared/connection-types';
 import { ConnectionActionCard } from './ConnectionActionCard';
 import { contextualMessage, type PageContext } from './page-context';
-import { api } from './api';
+import { api, authHeaders } from './api';
 import type { Page } from '../server/pages';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -150,7 +150,7 @@ export function Chat({
     try {
       const res = await fetch('/api/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           dotId: dot.id,
           spaceId: dot.spaceId,

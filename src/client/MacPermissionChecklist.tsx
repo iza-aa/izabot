@@ -2,6 +2,7 @@
 // macOS Readiness & TCC Permission Checklist — Conforming strictly to DESIGN.md
 
 import { useState, useEffect, useCallback } from 'react';
+import { authHeaders } from './api';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -28,7 +29,9 @@ export function MacPermissionChecklist() {
   const fetchPermissions = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/system/permissions');
+      const res = await fetch('/api/system/permissions', {
+        headers: authHeaders(),
+      });
       if (res.ok) {
         const data = (await res.json()) as PermissionsState;
         setPerms(data);
@@ -59,7 +62,7 @@ export function MacPermissionChecklist() {
     try {
       await fetch('/api/system/open-settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ pane, target }),
       });
       setTimeout(() => void fetchPermissions(), 2500);
@@ -81,7 +84,9 @@ export function MacPermissionChecklist() {
       <div className="permission-pill-bar">
         <div className="permission-pill-status">
           <span className="online-dot-inline" />
-          <span>Mac automation ready — Background CUA and perception active</span>
+          <span>
+            Mac automation ready — Background CUA and perception active
+          </span>
         </div>
         <button
           type="button"
@@ -95,15 +100,23 @@ export function MacPermissionChecklist() {
   }
 
   return (
-    <section className="permission-card" aria-label="macOS permission readiness">
+    <section
+      className="permission-card"
+      aria-label="macOS permission readiness"
+    >
       <div className="permission-card-header">
         <div className="permission-card-title">
-          <span className={`permission-badge-icon ${isAllReady ? 'ready' : 'warn'}`}>
+          <span
+            className={`permission-badge-icon ${isAllReady ? 'ready' : 'warn'}`}
+          >
             {isAllReady ? <ShieldCheck size={15} /> : <ShieldAlert size={15} />}
           </span>
           <div>
             <strong>macOS automation permissions</strong>
-            <p>Required so a Dot can read windows and send input in the background.</p>
+            <p>
+              Required so a Dot can read windows and send input in the
+              background.
+            </p>
           </div>
         </div>
 
@@ -133,9 +146,13 @@ export function MacPermissionChecklist() {
         <div className="permission-row">
           <div>
             <strong>1. Accessibility (input control)</strong>
-            <span>Lets a Dot send clicks and keystrokes to bound app windows.</span>
+            <span>
+              Lets a Dot send clicks and keystrokes to bound app windows.
+            </span>
           </div>
-          <span className={`status ${perms.accessibility ? 'completed' : 'failed'}`}>
+          <span
+            className={`status ${perms.accessibility ? 'completed' : 'failed'}`}
+          >
             <span />
             {perms.accessibility ? 'Granted' : 'Required'}
           </span>
@@ -144,9 +161,19 @@ export function MacPermissionChecklist() {
         {!perms.accessibility && (
           <div className="permission-callout">
             <p>
-              Drag the app files below directly into <strong>System Settings &gt; Accessibility</strong> to grant permission:
+              Drag the app files below directly into{' '}
+              <strong>System Settings &gt; Accessibility</strong> to grant
+              permission:
             </p>
-            <div className="permission-callout-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+            <div
+              className="permission-callout-actions"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                marginTop: '8px',
+              }}
+            >
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                   type="button"
@@ -190,7 +217,9 @@ export function MacPermissionChecklist() {
         <div className="permission-row">
           <div>
             <strong>2. Screen Recording (window capture)</strong>
-            <span>Required by Apple Vision OCR and the right-hand canvas preview.</span>
+            <span>
+              Required by Apple Vision OCR and the right-hand canvas preview.
+            </span>
           </div>
           {perms.screen_recording ? (
             <span className="status completed">
@@ -211,9 +240,13 @@ export function MacPermissionChecklist() {
         <div className="permission-row">
           <div>
             <strong>3. Background CUA service</strong>
-            <span>Local service that sends background clicks and keystrokes.</span>
+            <span>
+              Local service that sends background clicks and keystrokes.
+            </span>
           </div>
-          <span className={`status ${perms.cua_daemon ? 'completed' : 'paused'}`}>
+          <span
+            className={`status ${perms.cua_daemon ? 'completed' : 'paused'}`}
+          >
             <span />
             {perms.cua_daemon ? 'Online' : 'Offline'}
           </span>
@@ -224,7 +257,9 @@ export function MacPermissionChecklist() {
             <strong>4. Perception Eye engine</strong>
             <span>Fast OCR binary and Logical Point coordinate mapping.</span>
           </div>
-          <span className={`status ${perms.perception_engine ? 'completed' : 'failed'}`}>
+          <span
+            className={`status ${perms.perception_engine ? 'completed' : 'failed'}`}
+          >
             <span />
             {perms.perception_engine ? 'Ready' : 'Missing'}
           </span>

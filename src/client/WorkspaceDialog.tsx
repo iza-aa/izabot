@@ -9,6 +9,7 @@ import {
   type WorkspaceState,
 } from '../shared/types';
 import { ConnectionsSection } from './ConnectionsSection';
+import { authHeaders } from './api';
 import { Mascot } from './Mascot';
 import {
   setThemePreference,
@@ -72,7 +73,7 @@ export function WorkspaceDialog({
   const [hasAccessibility, setHasAccessibility] = useState<boolean>(false);
   useEffect(() => {
     if (dialog.type === 'settings') {
-      void fetch('/api/system/permissions')
+      void fetch('/api/system/permissions', { headers: authHeaders() })
         .then((r) => r.json())
         .then((data: { accessibility?: boolean }) => {
           setHasAccessibility(Boolean(data.accessibility));
@@ -85,17 +86,19 @@ export function WorkspaceDialog({
     try {
       await fetch('/api/system/open-settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ pane: 'accessibility' }),
       });
       await fetch('/api/system/open-settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ pane: 'reveal-binary' }),
       });
       const pollTimer = window.setInterval(async () => {
         try {
-          const res = await fetch('/api/system/permissions');
+          const res = await fetch('/api/system/permissions', {
+            headers: authHeaders(),
+          });
           const data = (await res.json()) as { accessibility?: boolean };
           if (data.accessibility) {
             setHasAccessibility(true);
@@ -518,7 +521,10 @@ export function WorkspaceDialog({
                   onClick={async () => {
                     await fetch('/api/system/permissions/confirm', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: {
+                        ...authHeaders(),
+                        'Content-Type': 'application/json',
+                      },
                       body: JSON.stringify({}),
                     });
                     setHasAccessibility(true);
@@ -529,7 +535,9 @@ export function WorkspaceDialog({
                 <button
                   type="button"
                   onClick={() => {
-                    void fetch('/api/system/permissions')
+                    void fetch('/api/system/permissions', {
+                      headers: authHeaders(),
+                    })
                       .then((r) => r.json())
                       .then((data: { accessibility?: boolean }) => {
                         setHasAccessibility(Boolean(data.accessibility));

@@ -1,5 +1,4 @@
 import { ComputerService } from './computer-service.js';
-import { ConnectionService } from './connections.js';
 import { PageService } from './page-service.js';
 import { randomUUID } from 'node:crypto';
 import {
@@ -14,11 +13,9 @@ import { DotAgent } from './dot-agent.js';
 import { runThreadTurn } from './headless.js';
 import { setupStatus, type PlatformConfig } from './platform-config.js';
 import { validateRuntimeScope } from './runtime-scope.js';
-import { learningSelector } from './learning.js';
 export class Platform {
   readonly pages: PageService;
   readonly computers: ComputerService;
-  readonly connections: ConnectionService;
   readonly intelligence?: CopilotKitIntelligence;
   readonly handler?: CopilotHonoApp;
   constructor(
@@ -31,7 +28,6 @@ export class Platform {
       config,
       () => store.settings().paused,
     );
-    this.connections = new ConnectionService(workspace.connections);
     this.pages = new PageService(workspace, () => {
       this.requireReady();
       return this.intelligence!;
@@ -41,16 +37,12 @@ export class Platform {
       apiKey: config.intelligenceKey,
       apiUrl: config.intelligenceApiUrl,
       wsUrl: config.intelligenceWsUrl,
-      getLearningContainerId: learningSelector(
-        workspace,
-        workspace.dots()[0]?.id,
-      ),
     });
     const runtime = new CopilotRuntime({
       intelligence: this.intelligence,
       identifyUser: async () => ({
         id: workspace.ownerId,
-        name: 'OpenDots owner',
+        name: 'izabot owner',
       }),
       agents: async (_ctx: any) =>
         Object.fromEntries(

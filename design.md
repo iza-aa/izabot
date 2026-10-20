@@ -1,12 +1,12 @@
-# DESIGN.md — OpenDots & izabot Design System Specification
+# DESIGN.md — izabot Design System Specification
 
-Dokumen spesifikasi desain antarmuka (_UI/UX Design System_) resmi untuk pengembangan aplikasi desktop **`OpenDots`** (`izabot`). Dokumen ini menjadi pedoman mutlak agar seluruh penambahan atau modifikasi UI di masa mendatang **tetap 100% konsisten, elegan, dan tidak membuat styling sembarangan**.
+Dokumen spesifikasi desain antarmuka (_UI/UX Design System_) resmi untuk pengembangan aplikasi desktop **`izabot`**. Dokumen ini menjadi pedoman mutlak agar seluruh penambahan atau modifikasi UI di masa mendatang **tetap 100% konsisten, elegan, dan tidak membuat styling sembarangan**.
 
 ---
 
 ## 1. Filosofi & Karakter Visual
 
-Desain OpenDots mengusung estetika **"Warm Precision Desktop Workspace"**:
+Desain izabot mengusung estetika **"Warm Precision Desktop Workspace"**:
 
 - **Bukan Chatbot Generik**: Menggabungkan kehangatan asisten personal (maskot 3D, warna lavender lembut) dengan presisi alat kerja profesional (garis tipis, font sistem Mac yang tajam, layout split-screen).
 - **Subtle & Restrained**: Menggunakan garis pemisah tipis (`1px solid var(--line)`), bayangan sangat halus, tanpa gradien neon berlebih, dan tanpa elemen visual yang berteriak.
@@ -68,7 +68,7 @@ Seluruh komponen wajib menggunakan variabel CSS berikut:
 
 ## 4. Standar Geometri & Border Radius
 
-Dilarang menggunakan border-radius acak. Gunakan standar geometri OpenDots:
+Dilarang menggunakan border-radius acak. Gunakan standar geometri izabot:
 
 - **Button & Input**: `border-radius: 9px`.
 - **Cards, Panes & Modals**: `border-radius: 12px` (atau `16px` untuk modal besar).
@@ -113,7 +113,7 @@ Dilarang menggunakan border-radius acak. Gunakan standar geometri OpenDots:
 - Batas kanan: `border-right: 1px solid var(--line)`.
 - Hanya ada **satu hierarki Spasi**: `SPACES ▸ Dots`. Tidak boleh ada bagian `DOTS` terpisah atau daftar Dot duplikat.
 - Komponen di dalam sidebar:
-  1. `Wordmark`: Logo dotted 4 bulatan (`.dotted-logo`) + teks wordmark. Wordmark saat ini masih `"OpenDots"`; rebrand ke `izabot` menunggu konfirmasi.
+  1. `Wordmark`: Logo dotted 4 bulatan (`.dotted-logo`) + teks wordmark. Wordmark memakai teks `"izabot"`.
   2. Tombol `+ New chat` penuh di bawah logo.
   3. Header `SPACES` dengan tombol `+` untuk membuat Space.
   4. Setiap Space memiliki tombol disclosure, nama, jumlah Dot, dan daftar Dot di bawahnya. Baris Dot membuka chat; tombol titik tiga membuka editor Dot.
@@ -127,6 +127,7 @@ Dilarang menggunakan border-radius acak. Gunakan standar geometri OpenDots:
 - Setiap pilihan menampilkan maskot 3D yang sama dengan warna berbeda. `Auto` memakai warna deterministik dari identitas Dot.
 - Pilihan karakter bersifat opsional; Dot lama tanpa nilai `avatar` tetap valid dan otomatis memakai `Auto`.
 - Warna karakter tidak boleh mengubah warna aksen global, status, atau warna tombol primer.
+- Editor Dot hanya memuat nama, karakter, role instructions, akses Space, dan memori. Automatic Learning dan Connections/MCP tidak ditampilkan.
 
 ### E. Space Workplace
 

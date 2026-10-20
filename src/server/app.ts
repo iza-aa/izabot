@@ -1,5 +1,4 @@
 import { computerRoutes } from './computer-routes.js';
-import { connectionRoutes } from './connection-routes.js';
 import { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 import { bodyLimit } from 'hono/body-limit';
@@ -108,7 +107,7 @@ export function createApp({
         !timingSafeEqual(expected, supplied)
       )
         return c.json(
-          { error: 'Enter your owner access token to unlock OpenDots.' },
+          { error: 'Enter your owner access token to unlock izabot.' },
           401,
         );
     }
@@ -121,11 +120,6 @@ export function createApp({
   });
 
   if (platform) app.route('/api', computerRoutes(platform.computers));
-  if (platform)
-    app.route(
-      '/api',
-      connectionRoutes(platform.workspace, platform.connections),
-    );
   const voice = platform ? new VoiceService(platform) : undefined;
   if (platform && voice) app.route('/api', workspaceRoutes(platform, voice));
 
@@ -376,7 +370,7 @@ export function createApp({
     const state = getTakeoverState();
     setTakeoverState({ active: false });
     try {
-      execSync(`osascript -e 'tell application "OpenDots" to activate'`);
+      execSync(`osascript -e 'tell application "izabot" to activate'`);
     } catch {}
     if (state.window_id) {
       bumpFrameVersion(state.window_id);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Modular Perception Engine for OpenDots: Apple Vision OCR + gpt-6-luna VLM grounding
+// Modular Perception Engine for izabot: Apple Vision OCR + gpt-6-luna VLM grounding
 
 import { execSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -141,7 +141,7 @@ export function runPerceptionListWindows(): ConnectedWindow[] {
     };
 
     const ignoredApps = new Set([
-      'OpenDots',
+      'izabot',
       'app',
       'Window Server',
       'Dock',

@@ -155,7 +155,7 @@ export function WorkspaceAgentCursor({
     if (phase === 'observe') return 'Observing the screen…';
     if (phase === 'click')
       return telemetry?.label ? `Click ${telemetry.label}` : 'Clicking';
-    return telemetry?.label || 'OpenDots Agent';
+    return telemetry?.label || 'izabot Agent';
   };
 
   return (
@@ -224,7 +224,7 @@ export function ConnectedAppWorkspace({
     norm_x: 0.2,
     norm_y: 0.2,
     phase: 'idle',
-    label: 'OpenDots Agent',
+    label: 'izabot Agent',
     is_clicking: false,
   });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -574,8 +574,7 @@ export function ConnectedAppWorkspace({
                 <Lock size={12} />
                 <span>
                   Locked to <strong>{selectedWin.app_name}</strong> (Window #
-                  {selectedWin.window_id}) — keep the window open behind
-                  OpenDots
+                  {selectedWin.window_id}) — keep the window open behind izabot
                 </span>
               </div>
               <small>

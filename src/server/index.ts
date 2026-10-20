@@ -84,7 +84,7 @@ app.get('/api/*', (c) => c.json({ error: 'Not found.' }, 404));
 app.use('/*', serveStatic({ root: './dist/client' }));
 app.get('*', serveStatic({ path: './dist/client/index.html' }));
 const server = serve({ fetch: app.fetch, hostname: host, port }, (info) => {
-  console.log(`OpenDots listening on http://${host}:${info.port}`);
+  console.log(`izabot listening on http://${host}:${info.port}`);
   runner.start();
 });
 setupWebSocketStreaming(server as unknown as HttpServer);

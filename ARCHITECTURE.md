@@ -210,7 +210,7 @@ OMP langsung meneruskan `center_x` dan `center_y` dari output di atas ke tool ba
 - **Workspace**: SQLite menyimpan Space, Dot, binding thread, page, app binding, dan preferensi. App playbook disimpan terpisah di `data/app-memory/`.
 - **Frontend shell**: `src/client/App.tsx` mengatur satu hierarki `SPACES ▸ Dots`, view chat, Workplace, Activity, dan Memories. Dialog Space/Dot/karakter/memori/schedule berada di `WorkspaceDialog.tsx`.
 - **Desktop**: window list, capture, input, dan cursor memakai layer desktop lokal; stream biner dikirim melalui WebSocket. Semua fetch langsung ke `/api` wajib membawa owner token yang sama dengan helper `api()`.
-- **Wordmark**: UI saat ini masih memakai `OpenDots`. Rebrand ke `izabot` belum dijalankan sampai ada konfirmasi eksplisit.
+- **Wordmark**: UI memakai `izabot`; identifier Tauri tetap `com.izabot.opendots` agar data dan build lama tetap kompatibel.
 
 ## 6. Delegasi Multi-Agent (`delegate_to_dot`)
 

@@ -1,15 +1,14 @@
-# OpenDots
+# izabot
 
 ### Local-first AI coworkers for your Mac.
 
-OpenDots is a desktop agent workspace built around **Spaces**, **Dots**, and a shared view of the apps you are working in. Each Space owns its Dots, bound apps, automations, and pages. Each Dot has a character, instructions, memory access, and a chat surface.
-
-> The UI wordmark is still **OpenDots**. The `izabot` rebrand is intentionally pending owner confirmation.
+izabot is a desktop agent workspace built around **Spaces**, **Dots**, and a shared view of the apps you are working in. Each Space owns its Dots, bound apps, automations, and pages. Each Dot has a character, instructions, memory access, and a chat surface. The Dot editor stays deliberately small: name, character, role instructions, Space access, and memory.
 
 ## What is included
 
 - **One navigation hierarchy: `SPACES ▸ Dots`.** No duplicate Dot sidebar.
 - **Character creation.** Pick `Auto`, `Blue`, `Mint`, `Orange`, or `Purple`; `Auto` falls back to a deterministic color for older Dots.
+- **Focused Dot editor.** Only name, character, role instructions, Space access, and memory are configurable. Automatic Learning and Connections/MCP are not part of the product surface.
 - **Space Workplace.** Workers, bound Mac apps, scheduled tasks, and searchable pages in one view.
 - **Desktop workspace.** A live window canvas, capture, cursor telemetry, and background input through the local desktop layer.
 - **Text and voice.** Persistent chat plus optional realtime speech calls.
@@ -88,7 +87,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for delegation, JIT, and stream security 
 
 ## Data and privacy
 
-The SQLite database stores Spaces, Dots, page metadata, thread bindings, app bindings, and preferences. App playbooks are stored under `data/app-memory/`. Conversation model calls go to the configured OpenAI-compatible provider. Voice and connected services receive data only when used. Do not put secrets in Memories or JIT scripts.
+The SQLite database stores Spaces, Dots, page metadata, thread bindings, app bindings, and preferences. App playbooks are stored under `data/app-memory/`. Conversation model calls go to the configured OpenAI-compatible provider. Voice receives data only when used. Do not put secrets in Memories or JIT scripts.
 
 ## License
 

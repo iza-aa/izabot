@@ -204,10 +204,10 @@ export function MacPermissionChecklist() {
                 <button
                   type="button"
                   onClick={() => void openSettings('reveal-binary', 'app')}
-                  title="Reveal OpenDots.app in Finder to drag into Accessibility"
+                  title="Reveal izabot.app in Finder to drag into Accessibility"
                 >
                   <FolderOpen size={12} />
-                  Drag 3: OpenDots.app
+                  Drag 3: izabot.app
                 </button>
               </div>
             </div>

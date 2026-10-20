@@ -3,10 +3,6 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { Platform } from './platform.js';
 import { VoiceService } from './voice.js';
-import {
-  learningContainerIdSchema,
-  validateLearningSettings,
-} from '../shared/learning.js';
 import { DOT_AVATARS } from '../shared/types.js';
 const dotSchema = z
   .object({
@@ -14,8 +10,6 @@ const dotSchema = z
     instructions: z.string().trim().min(3).max(2000),
     memoryAllowed: z.boolean(),
     avatar: z.enum(DOT_AVATARS).nullable().optional(),
-    learningContainerId: learningContainerIdSchema.optional(),
-    skillDeliveryEnabled: z.boolean().optional(),
     spaceIds: z.array(z.string().min(1)).min(1).max(100).optional(),
     spaceId: z.string().min(1).optional(),
   })
@@ -96,27 +90,10 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
     if (!data.success)
       return c.json(
         {
-          error:
-            'Provide a name, role instructions, and explicit tool permissions.',
+          error: 'Provide a name, role instructions, and a memory preference.',
         },
         400,
       );
-    try {
-      validateLearningSettings(
-        data.data.learningContainerId ?? null,
-        data.data.skillDeliveryEnabled ?? false,
-      );
-    } catch (error) {
-      return c.json(
-        {
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Invalid Learning settings.',
-        },
-        400,
-      );
-    }
     return c.json(
       platform.workspace.createDot(
         data.data.spaceId,
@@ -124,8 +101,6 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
         data.data.instructions,
         data.data.memoryAllowed,
         data.data.spaceIds,
-        data.data.learningContainerId,
-        data.data.skillDeliveryEnabled,
         data.data.avatar ?? null,
       ),
       201,
@@ -136,24 +111,6 @@ export function workspaceRoutes(platform: Platform, voice: VoiceService) {
     if (!data.success) return c.json({ error: 'Invalid Dot settings.' }, 400);
     const current = platform.workspace.dot(c.req.param('id'));
     if (!current) return c.json({ error: 'Dot not found.' }, 404);
-    try {
-      validateLearningSettings(
-        data.data.learningContainerId === undefined
-          ? (current.learningContainerId ?? null)
-          : data.data.learningContainerId,
-        data.data.skillDeliveryEnabled ?? current.skillDeliveryEnabled ?? false,
-      );
-    } catch (error) {
-      return c.json(
-        {
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Invalid Learning settings.',
-        },
-        400,
-      );
-    }
     return c.json(platform.workspace.updateDot(c.req.param('id'), data.data));
   });
   app.post('/conversations', async (c) => {

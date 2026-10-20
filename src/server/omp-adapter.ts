@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Autonomous ReAct Tool-Calling Adapter for OpenDots (OMP + Perception Eye + Background CUA)
+// Autonomous ReAct Tool-Calling Adapter for izabot (OMP + Perception Eye + Background CUA)
 
 import { spawn } from 'node:child_process';
 import type { Context } from 'hono';
@@ -245,7 +245,7 @@ async function resolveBoundSurface(userPrompt?: string): Promise<BoundSurfaceRes
         return {
           surface: null,
           mismatchReason:
-            'Tidak ada aplikasi browser (Safari atau Google Chrome) yang terbuka di Mac Anda. Silakan buka browser terlebih dahulu (biarkan di belakang OpenDots).',
+            'Tidak ada aplikasi browser (Safari atau Google Chrome) yang terbuka di Mac Anda. Silakan buka browser terlebih dahulu (biarkan di belakang izabot).',
         };
       }
     }
@@ -271,7 +271,7 @@ async function resolveBoundSurface(userPrompt?: string): Promise<BoundSurfaceRes
         return {
           surface: null,
           mismatchReason:
-            'Aplikasi WhatsApp belum terbuka di Mac Anda. Silakan buka WhatsApp terlebih dahulu (biarkan di belakang OpenDots).',
+            'Aplikasi WhatsApp belum terbuka di Mac Anda. Silakan buka WhatsApp terlebih dahulu (biarkan di belakang izabot).',
         };
       }
     }
@@ -296,7 +296,7 @@ async function resolveBoundSurface(userPrompt?: string): Promise<BoundSurfaceRes
     }
     return {
       surface: null,
-      mismatchReason: `Aplikasi ${matchedTarget.display} belum terbuka atau jendelanya sedang di-minimize di macOS. Silakan buka ${matchedTarget.display} (biarkan di belakang OpenDots) dan pilih di kanvas Workspace.`,
+      mismatchReason: `Aplikasi ${matchedTarget.display} belum terbuka atau jendelanya sedang di-minimize di macOS. Silakan buka ${matchedTarget.display} (biarkan di belakang izabot) dan pilih di kanvas Workspace.`,
     };
   }
 
@@ -419,9 +419,9 @@ export function buildReActSystemPrompt(
       : '';
 
   return [
-    `OPEN_DOTS: TRUE AUTONOMOUS REACT TOOL-CALLING AGENT SPECIFICATION`,
+    `IZABOT: TRUE AUTONOMOUS REACT TOOL-CALLING AGENT SPECIFICATION`,
     `INSTRUKSI MUTLAK UNTUK AI CODING AGENT:`,
-    `Dokumen ini adalah panduan implementasi teknis untuk bertindak sebagai ReAct (Reasoning + Acting) Agent otonom sejati di dalam panel kanan OpenDots.`,
+    `Dokumen ini adalah panduan implementasi teknis untuk bertindak sebagai ReAct (Reasoning + Acting) Agent otonom sejati di dalam panel kanan izabot.`,
     `Dilarang keras menggunakan kata kunci rekayasa regex. Model AI langsung diberikan instrumen tool resmi (observe_workspace, click_workspace, type_in_workspace, press_key_in_workspace, navigate_browser, final_answer${canDelegate ? ', delegate_to_dot' : ''}${canUseJit ? ', dan jit_synthesize_and_run' : ''}).`,
     `Dilarang menggunakan karakter emoji dalam pemikiran maupun jawaban akhir.`,
     ``,

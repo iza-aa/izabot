@@ -266,7 +266,7 @@ export function App() {
             onChange={(e) => setAuth(e.target.value)}
             required
           />
-          <button className="primary">Unlock OpenDots</button>
+          <button className="primary">Unlock izabot</button>
         </form>
         {error && (
           <p className="chat-error" role="alert">
@@ -324,7 +324,7 @@ export function App() {
             <i />
             <i />
           </span>
-          OpenDots<span className="wordmark-dot">•</span>
+          izabot<span className="wordmark-dot">•</span>
         </button>
         <button
           className="new-chat nav-item"

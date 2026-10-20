@@ -1,11 +1,11 @@
-# Intelligence signup and OpenDots usage tracking
+# Intelligence signup and izabot usage tracking
 
-OpenDots uses the CopilotKit SDK's existing telemetry transport. There is no
+izabot uses the CopilotKit SDK's existing telemetry transport. There is no
 separate PostHog SDK or PostHog key to configure in this application.
 
 ## Configure the server
 
-Run these commands from the OpenDots root:
+Run these commands from the izabot root:
 
 ```sh
 npx copilotkit@latest login
@@ -32,8 +32,8 @@ Keep the identity server-side. Leave `OWNER_ID` and conversation/thread IDs
 unchanged; they scope app data and are not the signup account identity.
 
 The SDK sends existing runtime events to
-`https://telemetry.copilotkit.ai/ingest`. OpenDots adds
-`accessibility_title: "OpenDots"`. The current SDK defaults to full sampling
+`https://telemetry.copilotkit.ai/ingest`. izabot adds the legacy
+`accessibility_title: "OpenDots"` tag for telemetry continuity. The current SDK defaults to full sampling
 (`1`), and Docker Compose uses the same default. An explicit
 `COPILOTKIT_TELEMETRY_SAMPLE_RATE` override is respected.
 
@@ -45,7 +45,7 @@ and restart the API. Both variables accept `true` or `1`. The `npm test` command
 
 - `intelligence_signup`: an Intelligence account created in Clerk, emitted by
   the existing backend sync with the Clerk user ID as its PostHog `distinct_id`.
-- `oss.runtime.instance_created`: the OpenDots runtime handler was created.
+- `oss.runtime.instance_created`: the izabot runtime handler was created.
 - `oss.runtime.copilot_request_created`: a request reached the runtime; this is
   usage evidence, not proof of a successful model answer.
 
@@ -54,10 +54,10 @@ when that identity resolves. Runtime and signup events can have different
 PostHog `distinct_id` values: join the runtime `clerk_user_id` property to the
 signup `distinct_id` rather than assuming a standard person funnel joins them.
 
-This connects completed signups to OpenDots usage. It does not prove OpenDots
-was the acquisition source: the account might predate OpenDots. Measuring
+This connects completed signups to izabot usage. It does not prove izabot
+was the acquisition source: the account might predate izabot. Measuring
 acquisition requires carrying a source through the Intelligence signup flow.
-OpenDots does not emit a duplicate signup event on startup, login or key entry.
+izabot does not emit a duplicate signup event on startup, login or key entry.
 
 ## Validate in PostHog
 
@@ -82,7 +82,7 @@ LIMIT 20
 
 Confirm the tag, the expected telemetry identity and the resolved Clerk subject.
 Then find that subject's `intelligence_signup` event. To count accounts signed
-up in the last 30 days that also used OpenDots in that period:
+up in the last 30 days that also used izabot in that period:
 
 Run the saved [signup-account query](telemetry/opendots-signups.hogql.sql).
 It joins requests to signup accounts by Clerk ID. If a request lacks Clerk
@@ -102,13 +102,13 @@ reporting surface is [dashboard 664553](https://eu.posthog.com/project/26816/das
 
 `npm test` disables production telemetry for ordinary fixtures. The telemetry
 tests start fresh processes, intercept SDK fetch calls before importing it,
-and check the OpenDots tag, CLI-issued identity header, full sampling, explicit
+and check the legacy OpenDots tag, CLI-issued identity header, full sampling, explicit
 sampling override, both opt-outs and absence of the project key in the payload.
 These checks prove the local SDK contract; production delivery and identity
 resolution require the PostHog checks above. Internal `@copilotkit.ai` accounts
 are excluded from signup sync, so validate a new external signup separately.
 
-Ask the reporting owner to add the OpenDots filter and Clerk-ID join to
+Ask the reporting owner to add the legacy OpenDots filter and Clerk-ID join to
 its reporting rule. The query counts signup accounts associated with usage,
 not signups caused by the template. Local Intelligence evaluation also requires
 CopilotKit sign-in, but a runtime event by itself does not establish a new signup.
@@ -120,7 +120,7 @@ The saved [signup-account query](telemetry/opendots-signups.hogql.sql) and
 probes. The [setup-event query](telemetry/opendots-setup.hogql.sql) and
 [installation conversion query](telemetry/opendots-setup-conversion.hogql.sql)
 report the [browser setup flow](SETUP-TELEMETRY.md). All four queries executed
-successfully against the production PostHog query API. Use these as the OpenDots
+successfully against the production PostHog query API. Use these as the izabot
 reporting rule in PostHog. Request counts are
 attempts, including requests rejected by the SDK; they are not successful answers.
 

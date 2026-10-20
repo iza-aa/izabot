@@ -13,8 +13,6 @@ it('persists spaces, specialist permissions, and canonical thread ownership', ()
     'Be concise',
     true,
     [space.id],
-    null,
-    false,
     'mint',
   );
   store.bindThread('thread-1', dot.id, 'Design research');

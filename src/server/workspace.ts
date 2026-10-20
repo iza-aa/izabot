@@ -1,11 +1,9 @@
 import { ComputerStore } from './computer-store.js';
-import { ConnectionStore } from './connection-store.js';
 import { Pages } from './pages.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { validateLearningSettings } from '../shared/learning.js';
 import type {
   CallReceipt,
   Conversation,
@@ -18,7 +16,6 @@ export class WorkspaceStore {
   private db: DatabaseSync;
   readonly pages: Pages;
   readonly computers: ComputerStore;
-  readonly connections: ConnectionStore;
   constructor(
     path: string,
     readonly ownerId: string,
@@ -32,12 +29,7 @@ export class WorkspaceStore {
       CREATE TABLE IF NOT EXISTS thread_bindings(id TEXT PRIMARY KEY, dotId TEXT NOT NULL, ownerId TEXT NOT NULL, title TEXT NOT NULL, createdAt INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS task_threads(taskId TEXT PRIMARY KEY, threadId TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY, threadId TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, status TEXT NOT NULL, transcript TEXT NOT NULL, error TEXT);`);
-    for (const [table, column, definition] of [
-      ['dots', 'learningContainerId', 'TEXT'],
-      ['dots', 'skillDeliveryEnabled', 'INTEGER NOT NULL DEFAULT 0'],
-      ['dots', 'avatar', 'TEXT'],
-      ['thread_bindings', 'learningContainerId', 'TEXT'],
-    ]) {
+    for (const [table, column, definition] of [['dots', 'avatar', 'TEXT']]) {
       if (
         !this.db
           .prepare(`PRAGMA table_info(${table})`)
@@ -69,7 +61,6 @@ export class WorkspaceStore {
         COMMIT;`);
     }
     this.computers = new ComputerStore(this.db);
-    this.connections = new ConnectionStore(this.db);
     this.pages = new Pages(this.db, (id) =>
       this.spaces().some((space) => space.id === id),
     );
@@ -148,7 +139,6 @@ export class WorkspaceStore {
           .all(String(row.id))
           .map((grant) => String(grant.spaceId)),
         memoryAllowed: !!row.memoryAllowed,
-        skillDeliveryEnabled: !!row.skillDeliveryEnabled,
       })) as unknown as Dot[];
   }
   dot(id: string) {
@@ -160,12 +150,9 @@ export class WorkspaceStore {
     instructions: string,
     memoryAllowed: boolean,
     spaceIds: string[] = [spaceId],
-    learningContainerId: string | null = null,
-    skillDeliveryEnabled = false,
     avatar: DotAvatar | null = null,
   ): Dot {
     this.validateSpaceAccess(spaceId, spaceIds);
-    validateLearningSettings(learningContainerId, skillDeliveryEnabled);
     const dot: Dot = {
       id: randomUUID(),
       spaceId,
@@ -174,15 +161,13 @@ export class WorkspaceStore {
       instructions,
       memoryAllowed,
       avatar,
-      learningContainerId,
-      skillDeliveryEnabled,
       createdAt: Date.now(),
     };
     this.db.exec('BEGIN');
     try {
       this.db
         .prepare(
-          'INSERT INTO dots (id, spaceId, name, instructions, memoryAllowed, createdAt, learningContainerId, skillDeliveryEnabled, avatar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO dots (id, spaceId, name, instructions, memoryAllowed, createdAt, avatar) VALUES (?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           dot.id,
@@ -191,8 +176,6 @@ export class WorkspaceStore {
           instructions,
           +memoryAllowed,
           dot.createdAt,
-          learningContainerId,
-          +skillDeliveryEnabled,
           avatar,
         );
       for (const id of dot.spaceIds)
@@ -221,8 +204,6 @@ export class WorkspaceStore {
     patch: Pick<Dot, 'name' | 'instructions' | 'memoryAllowed'> & {
       spaceId?: string;
       spaceIds?: string[];
-      learningContainerId?: string | null;
-      skillDeliveryEnabled?: boolean;
       avatar?: DotAvatar | null;
     },
   ): Dot {
@@ -233,28 +214,13 @@ export class WorkspaceStore {
     this.validateSpaceAccess(defaultSpace, spaceIds);
     const avatar =
       patch.avatar === undefined ? (current.avatar ?? null) : patch.avatar;
-    const learningContainerId =
-      patch.learningContainerId === undefined
-        ? (current.learningContainerId ?? null)
-        : patch.learningContainerId;
-    const skillDeliveryEnabled =
-      patch.skillDeliveryEnabled ?? current.skillDeliveryEnabled ?? false;
-    validateLearningSettings(learningContainerId, skillDeliveryEnabled);
     this.db.exec('BEGIN');
     try {
       this.db
         .prepare(
-          'UPDATE dots SET name=?, instructions=?, memoryAllowed=?, learningContainerId=?, skillDeliveryEnabled=?, avatar=? WHERE id=?',
+          'UPDATE dots SET name=?, instructions=?, memoryAllowed=?, avatar=? WHERE id=?',
         )
-        .run(
-          patch.name,
-          patch.instructions,
-          +patch.memoryAllowed,
-          learningContainerId,
-          +skillDeliveryEnabled,
-          avatar,
-          id,
-        );
+        .run(patch.name, patch.instructions, +patch.memoryAllowed, avatar, id);
       this.db
         .prepare('UPDATE dots SET spaceId=? WHERE id=?')
         .run(defaultSpace, id);
@@ -284,20 +250,12 @@ export class WorkspaceStore {
       ownerId: this.ownerId,
       title,
       createdAt: Date.now(),
-      learningContainerId: dot.learningContainerId ?? null,
     };
     this.db
       .prepare(
-        'INSERT INTO thread_bindings (id, dotId, ownerId, title, createdAt, learningContainerId) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO thread_bindings (id, dotId, ownerId, title, createdAt) VALUES (?, ?, ?, ?, ?)',
       )
-      .run(
-        id,
-        dotId,
-        this.ownerId,
-        title,
-        value.createdAt,
-        value.learningContainerId ?? null,
-      );
+      .run(id, dotId, this.ownerId, title, value.createdAt);
     return value;
   }
   requireThread(id: string, dotId?: string): Conversation {

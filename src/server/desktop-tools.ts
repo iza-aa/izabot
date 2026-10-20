@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Universal desktop automation tools bridging OpenDots to Background Computer Use & Cua Driver (port 3211)
+// Universal desktop automation tools bridging izabot to Background Computer Use & Cua Driver (port 3211)
 
 import { execSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -251,7 +251,7 @@ export function syncCursorFromBcuResponse(
     (bcuData?.cursor as { targetPointAppKit?: { x: number; y: number } } | undefined)?.targetPointAppKit;
 
   const cursorSession = (bcuData?.cursor as { session?: { name?: string; color?: string } } | undefined)?.session;
-  const finalLabel = labelOverride ?? cursorSession?.name ?? 'OpenDots Agent';
+  const finalLabel = labelOverride ?? cursorSession?.name ?? 'izabot Agent';
   const finalPhase = phaseOverride ?? (isClicking ? 'click' : 'move');
   const frame = winInfo?.frameAppKit;
 
@@ -520,7 +520,7 @@ export async function cuaClick(
     // Phase 1: Approach glide
     setCursorAction(resolvedWindowId, Math.round(x), Math.round(y), false, {
       phase: 'move',
-      label: 'OpenDots Agent',
+      label: 'izabot Agent',
       duration_ms: glideDuration,
     });
 
@@ -901,7 +901,7 @@ export async function getConnectedWindows(): Promise<ConnectedWindow[]> {
     };
     const all = json.result?.structuredContent?.windows ?? [];
     const ignoredApps = new Set([
-      'OpenDots',
+      'izabot',
       'app',
       'Window Server',
       'CursorUIViewService',

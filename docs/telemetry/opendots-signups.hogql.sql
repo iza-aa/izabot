@@ -1,4 +1,4 @@
--- Signup accounts with OpenDots requests in the same 30-day window.
+-- Signup accounts with legacy OpenDots-tagged requests in the same 30-day window.
 -- Resolve a missing request Clerk ID from boot/runtime events with the same
 -- telemetry identity. Validation probes are excluded from both sides.
 SELECT count(DISTINCT signup.distinct_id) AS signups_with_opendots_usage

@@ -593,6 +593,8 @@ export class AgentSwarmOrchestrator extends EventEmitter {
       updatedAt: now,
     });
 
-    return this.runTicket(ticketId);
+    return this.runTicket(ticketId).finally(() => {
+      this.visitedSignatures.delete(workflowId);
+    });
   }
 }
